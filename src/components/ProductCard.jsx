@@ -1,0 +1,71 @@
+import { Plus } from "lucide-react";
+import { calcSalePrice, fmt } from "../utils/pricing.js";
+
+export default function ProductCard({ product, margin, inCart, onAdd, delay }) {
+  const salePrice = calcSalePrice(product.cost, margin);
+
+  const bg = {
+    Nueces:  "linear-gradient(135deg, #1c1508 0%, #0e0b04 100%)",
+    Mezclas: "linear-gradient(135deg, #0d1308 0%, #060a04 100%)",
+    Frutas:  "linear-gradient(135deg, #150a0a 0%, #0a0505 100%)",
+  }[product.category] || "linear-gradient(135deg, #111 0%, #080808 100%)";
+
+  return (
+    <div
+      className="card-hover glass anim-in"
+      style={{ borderRadius: 3, overflow: "hidden", animationDelay: `${delay}ms` }}
+    >
+      {/* Image area */}
+      <div style={{
+        height: 210, background: bg, position: "relative",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        overflow: "hidden",
+      }}>
+        {/* Radial glow */}
+        <div style={{
+          position: "absolute", inset: 0,
+          background: "radial-gradient(ellipse at 35% 45%, rgba(201,168,76,0.07) 0%, transparent 65%)",
+        }} />
+        {/* Subtle grid texture */}
+        <div style={{
+          position: "absolute", inset: 0,
+          backgroundImage: "linear-gradient(rgba(201,168,76,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(201,168,76,0.03) 1px, transparent 1px)",
+          backgroundSize: "32px 32px",
+        }} />
+        <span style={{ fontSize: "3.8rem", position: "relative", filter: "drop-shadow(0 4px 12px rgba(0,0,0,0.6))" }}>
+          {product.emoji}
+        </span>
+        <span className="tag-pill" style={{ position: "absolute", top: 14, right: 14 }}>
+          {product.category}
+        </span>
+      </div>
+
+      {/* Info */}
+      <div style={{ padding: "20px 22px 24px" }}>
+        <h3 className="serif" style={{
+          fontSize: "1.12rem", fontWeight: 400,
+          color: "#e0d8c8", marginBottom: 5,
+        }}>
+          {product.name}
+        </h3>
+        <p style={{ fontSize: "0.62rem", color: "#4a4540", letterSpacing: "0.18em", marginBottom: 18 }}>
+          {product.unit}
+        </p>
+
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <span className="serif" style={{ fontSize: "1.5rem", fontWeight: 300, color: "#c9a84c" }}>
+            {fmt(salePrice)}
+          </span>
+          <button
+            onClick={onAdd}
+            className="btn-gold"
+            style={{ padding: "9px 16px", borderRadius: 2, display: "flex", alignItems: "center", gap: 6 }}
+          >
+            <Plus size={11} />
+            {inCart > 0 ? `Agregar (${inCart})` : "Agregar"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
