@@ -85,6 +85,7 @@ body {
 /* ─── Range input ────────────────────────────────────────────────────────── */
 input[type='range'] {
   -webkit-appearance: none;
+  appearance: none;
   width: 100%;
   height: 2px;
   background: linear-gradient(to right, #c9a84c var(--pct, 20%), #222 var(--pct, 20%));
@@ -130,3 +131,155 @@ input[type='range']::-webkit-slider-thumb {
 /* ─── Product row ────────────────────────────────────────────────────────── */
 tr.product-row { transition: background 0.15s; }
 tr.product-row:hover { background: rgba(201,168,76,0.03) !important; }
+
+/* ─── Skip to content (a11y) ─────────────────────────────────────────────── */
+.skip-to-content {
+  position: absolute;
+  top: -100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #c9a84c;
+  color: #070707;
+  padding: 10px 20px;
+  font-family: 'Jost', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  z-index: 9999;
+  border-radius: 0 0 4px 4px;
+  text-decoration: none;
+  transition: top 0.2s ease;
+}
+.skip-to-content:focus {
+  top: 0;
+}
+
+/* ─── Focus visible (a11y — teclado) ─────────────────────────────────────── */
+*:focus-visible {
+  outline: 2px solid #c9a84c;
+  outline-offset: 2px;
+}
+button:focus:not(:focus-visible),
+a:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* ─── Skeleton shimmer ───────────────────────────────────────────────────── */
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to   { background-position: 200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, #111 25%, #1a1a1a 50%, #111 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 3px;
+}
+
+/* ─── Toast notification ─────────────────────────────────────────────────── */
+@keyframes toastIn {
+  from { transform: translateY(20px); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+@keyframes toastOut {
+  from { transform: translateY(0); opacity: 1; }
+  to   { transform: translateY(-10px); opacity: 0; }
+}
+.toast {
+  position: fixed;
+  bottom: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(20, 20, 20, 0.95);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(201, 168, 76, 0.25);
+  color: #e8e0d0;
+  padding: 12px 24px;
+  border-radius: 4px;
+  font-family: 'Jost', sans-serif;
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  z-index: 9000;
+  pointer-events: none;
+  animation: toastIn 0.3s ease both;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+}
+.toast.out {
+  animation: toastOut 0.25s ease both;
+}
+
+/* ─── Cart badge bounce ──────────────────────────────────────────────────── */
+@keyframes badgeBounce {
+  0%   { transform: scale(1); }
+  30%  { transform: scale(1.35); }
+  50%  { transform: scale(0.9); }
+  70%  { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+.badge-bounce {
+  animation: badgeBounce 0.4s ease;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/* RESPONSIVE — Mobile first                                                 */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Mobile (<= 480px) ──────────────────────────────────────────────────── */
+@media (max-width: 480px) {
+  header > div {
+    padding: 0 16px !important;
+    height: 60px !important;
+  }
+  header h1 {
+    font-size: 1.15rem !important;
+  }
+  header nav {
+    gap: 12px !important;
+  }
+  .nav-link {
+    font-size: 0.58rem;
+    letter-spacing: 0.15em;
+  }
+  main {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+    padding-top: 36px !important;
+  }
+}
+
+/* ─── Tablet (<= 768px) ──────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  /* La tabla admin se vuelve scrollable */
+  table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  /* Tabla scroll indicator */
+  .glass:has(table)::after {
+    content: '';
+    display: block;
+    height: 2px;
+    background: linear-gradient(90deg, #c9a84c, transparent);
+    opacity: 0.3;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/* ACCESIBILIDAD — Reducir movimiento                                        */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .card-hover:hover {
+    transform: none;
+  }
+  .skeleton {
+    animation: none;
+    background: #151515;
+  }
+}

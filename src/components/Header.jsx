@@ -2,12 +2,15 @@ import { ShoppingCart } from "lucide-react";
 
 export default function Header({ view, setView, cartCount, onOpenCart }) {
   return (
-    <header style={{
-      position: "sticky", top: 0, zIndex: 50,
-      background: "rgba(7,7,7,0.9)",
-      backdropFilter: "blur(20px)",
-      borderBottom: "1px solid rgba(255,255,255,0.05)",
-    }}>
+    <header
+      role="banner"
+      style={{
+        position: "sticky", top: 0, zIndex: 50,
+        background: "rgba(7,7,7,0.9)",
+        backdropFilter: "blur(20px)",
+        borderBottom: "1px solid rgba(255,255,255,0.05)",
+      }}
+    >
       <div style={{
         maxWidth: 1200, margin: "0 auto",
         padding: "0 28px", height: 70,
@@ -30,11 +33,12 @@ export default function Header({ view, setView, cartCount, onOpenCart }) {
         </div>
 
         {/* Nav */}
-        <nav style={{ display: "flex", alignItems: "center", gap: 28 }}>
+        <nav role="navigation" aria-label="Navegación principal" style={{ display: "flex", alignItems: "center", gap: 28 }}>
           <button
             className="nav-link"
             onClick={() => setView("catalog")}
             style={{ color: view === "catalog" ? "#c9a84c" : "#888" }}
+            aria-current={view === "catalog" ? "page" : undefined}
           >
             Catálogo
           </button>
@@ -42,6 +46,7 @@ export default function Header({ view, setView, cartCount, onOpenCart }) {
             className="nav-link"
             onClick={() => setView("admin")}
             style={{ color: view === "admin" ? "#c9a84c" : "#444", fontSize: "0.6rem" }}
+            aria-current={view === "admin" ? "page" : undefined}
           >
             ⚙ Admin
           </button>
@@ -50,6 +55,7 @@ export default function Header({ view, setView, cartCount, onOpenCart }) {
           <button
             id="cart-button"
             onClick={onOpenCart}
+            aria-label={`Abrir carrito${cartCount > 0 ? `, ${cartCount} artículo${cartCount !== 1 ? "s" : ""}` : ""}`}
             style={{
               background: "none",
               border: "1px solid rgba(201,168,76,0.28)",
@@ -68,15 +74,20 @@ export default function Header({ view, setView, cartCount, onOpenCart }) {
               e.currentTarget.style.borderColor = "rgba(201,168,76,0.28)";
             }}
           >
-            <ShoppingCart size={15} />
+            <ShoppingCart size={15} aria-hidden="true" />
             {cartCount > 0 && (
-              <span style={{
-                position: "absolute", top: -7, right: -7,
-                background: "#c9a84c", color: "#070707",
-                borderRadius: "50%", width: 18, height: 18,
-                fontSize: "0.6rem", fontWeight: 600,
-                display: "flex", alignItems: "center", justifyContent: "center",
-              }}>
+              <span
+                className="badge-bounce"
+                key={cartCount}
+                style={{
+                  position: "absolute", top: -7, right: -7,
+                  background: "#c9a84c", color: "#070707",
+                  borderRadius: "50%", width: 18, height: 18,
+                  fontSize: "0.6rem", fontWeight: 600,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}
+                aria-hidden="true"
+              >
                 {cartCount}
               </span>
             )}
