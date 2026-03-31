@@ -486,6 +486,17 @@ app.get("/health", (_, res) => res.json({
   timestamp: new Date().toISOString(),
 }));
 
+// Servir Catálogo Integrado al Frontend (Fotos, Overrides y Sheets)
+app.get("/api/catalog", async (req, res) => {
+  try {
+    const list = await catalog.getAll();
+    res.json(list || []);
+  } catch (err) {
+    console.error("[CATALOG API]", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.use("/api/kb",    kbRoutes);
 app.use("/api/admin", adminRoutes);
 

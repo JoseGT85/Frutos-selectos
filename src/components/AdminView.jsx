@@ -4,7 +4,7 @@ import {
   Eye, EyeOff, CheckCircle, AlertCircle, Plus, Edit2, Trash2, Image as ImageIcon, Link2
 } from "lucide-react";
 import { calcSalePrice, fmt } from "../utils/pricing.js";
-import { addCustomProductAPI, setCostOverrideAPI, deleteCustomProductAPI, uploadImageAPI, setProductImageAPI } from "../services/api.js";
+import { addCustomProductAPI, setCostOverrideAPI, deleteCustomProductAPI, uploadImageAPI, setProductImageAPI, setNameOverrideAPI } from "../services/api.js";
 
 export default function AdminView({ products, margin, setMargin, syncing, syncStatus, onSync }) {
   const [showCosts, setShowCosts] = useState(false);
@@ -12,6 +12,17 @@ export default function AdminView({ products, margin, setMargin, syncing, syncSt
   const [uploadingName, setUploadingName] = useState(null);
 
   const rangeStyle = { "--pct": `${margin}%` };
+
+  const handleNameOverride = async (originalName, currentName) => {
+    const raw = window.prompt(`Modificar Nombre Visual para:\n${originalName}\n\nDejalo vacío o cancelá para volver al nombre original de Sheets.`, currentName);
+    if (raw === null) return;
+    try {
+      await setNameOverrideAPI(originalName, raw);
+      onSync();
+    } catch (err) {
+      alert("Error: " + err.message);
+    }
+  };
 
   const handleOverrideCost = async (pName, currentCost) => {
     const raw = window.prompt(`Modificar Costo Base (ARS) para:\n${pName}\n\nIngresá "0" para eliminar la sobrescritura y volver al costo de Sheets.`, currentCost);
@@ -302,7 +313,19 @@ export default function AdminView({ products, margin, setMargin, syncing, syncSt
                       
                       <span className="serif" style={{ fontSize: "0.95rem", color: "#d8d0c0" }}>
                         {p.name}
+                        {p.isNameOverride && (
+                          <span style={{ marginLeft: 8, fontSize: "0.5rem", color: "#888", border: "1px solid rgba(255,255,255,0.1)", padding: "1px 4px", borderRadius: 3, letterSpacing: "0.05em", verticalAlign: "middle" }}>RENOMBRADO</span>
+                        )}
                       </span>
+                      {!p.isCustom && (
+                        <button 
+                          onClick={() => handleNameOverride(p.originalName || p.name, p.name)}
+                          style={{ background: "none", border: "none", cursor: "pointer", color: "#888", padding: 0, marginLeft: 6, opacity: 0.7 }}
+                          title="Editar nombre visual"
+                        >
+                          <Edit2 size={11} />
+                        </button>
+                      )}
                     </div>
                   </td>
                   <td style={{ padding: "14px 22px" }}>
@@ -326,7 +349,7 @@ export default function AdminView({ products, margin, setMargin, syncing, syncSt
                         )}
                         {!p.isCustom && (
                           <button 
-                            onClick={() => handleOverrideCost(p.name, p.cost)}
+                            onClick={() => handleOverrideCost(p.originalName || p.name, p.cost)}
                             style={{ background: "none", border: "none", cursor: "pointer", color: "#888", padding: 0 }}
                             title="Sobrescribir costo"
                           >
@@ -338,10 +361,10 @@ export default function AdminView({ products, margin, setMargin, syncing, syncSt
                           title="Subir archivo desde PC"
                         >
                           <ImageIcon size={13} />
-                          <input type="file" accept="image/*" hidden onChange={(e) => handleFileChange(e, p.name)} />
+                          <input type="file" accept="image/*" hidden onChange={(e) => handleFileChange(e, p.originalName || p.name)} />
                         </label>
                         <button 
-                          onClick={() => handleUrlAction(p.name)}
+                          onClick={() => handleUrlAction(p.originalName || p.name)}
                           style={{ background: "none", border: "none", cursor: "pointer", color: p.imageUrl && !p.imageUrl.includes("/uploads") ? "#ccc" : "#555", padding: 0, marginLeft: 8 }}
                           title="Pegar URL de Internet / Borrar"
                         >

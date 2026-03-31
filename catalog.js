@@ -68,12 +68,13 @@ export class ProductCatalog {
   #enrichWithLocalData(products) {
     const overrides = customCatalog.getOverrides();
     const images    = customCatalog.getImages();
+    const nameOverrides = customCatalog.getNameOverrides();
     const custom    = customCatalog.getCustomProducts();
 
     // 1. Sobrescribir costos y anexar fotos de Sheets si coinciden en el nombre
     const enriched = products.map(p => {
       const pName = p.name.trim();
-      let merged = { ...p };
+      let merged = { ...p, originalName: pName };
       
       if (overrides[pName]) {
         merged.cost = overrides[pName];
@@ -82,14 +83,23 @@ export class ProductCatalog {
       if (images[pName]) {
         merged.imageUrl = images[pName];
       }
+      if (nameOverrides[pName]) {
+        merged.name = nameOverrides[pName];
+        merged.isNameOverride = true;
+      }
       
       return merged;
     });
 
     // 2. Agregar los manuales y recabar sus fotos también
     const customWithImages = custom.map(c => {
-      if (images[c.name.trim()]) c.imageUrl = images[c.name.trim()];
-      return c;
+      let merged = { ...c, originalName: c.name.trim() };
+      if (images[merged.originalName]) merged.imageUrl = images[merged.originalName];
+      if (nameOverrides[merged.originalName]) {
+        merged.name = nameOverrides[merged.originalName];
+        merged.isNameOverride = true;
+      }
+      return merged;
     });
 
     return [...enriched, ...customWithImages];

@@ -1,34 +1,24 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// API SERVICE — fetch de productos con fallback a datos mock
+// API SERVICE — Conexión directa al Catálogo Híbrido Backend
 // ─────────────────────────────────────────────────────────────────────────────
 import config from '../config/index.js';
-import { MOCK_API_DATA } from '../data/mockProducts.js';
+
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
 
 /**
- * Obtiene la lista de productos.
- * Si VITE_API_ENDPOINT está configurado, hace fetch al endpoint real.
- * De lo contrario, devuelve los datos mock con latencia simulada.
- *
- * Estructura esperada del JSON: [{ id, name, cost, category, unit, emoji }]
- *
+ * Obtiene la lista unificada de productos directamente del Motor Principal
+ * (Google Sheets + Fotografías + Precios Modificados).
  * @returns {Promise<Array>} Lista de productos
  */
 export async function fetchProducts() {
-  if (config.apiEndpoint) {
-    const res = await fetch(config.apiEndpoint);
-    if (!res.ok) throw new Error(`API error: ${res.status}`);
-    const data = await res.json();
-    return data;
-  }
-
-  // Modo desarrollo — datos mock con latencia simulada
-  await new Promise((r) => setTimeout(r, 900));
-  return MOCK_API_DATA;
+  const res = await fetch(`${BACKEND_URL}/api/catalog`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return await res.json();
 }
 
-// ─── ADMIN API (Requieren Configurar VITE_BACKEND_URL) ───────────────────────
+// ─── ADMIN API (Requieren Token de Auth JWT) ─────────────────────────────────
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
+// (El valor de BACKEND_URL ya está arriba)
 
 function getAuthHeaders() {
   const token = localStorage.getItem("difrumarket:adminToken");
@@ -83,6 +73,13 @@ export async function setCostOverrideAPI(name, newCost) {
   return fetchWithAuth(`${BACKEND_URL}/api/admin/catalog/override`, {
     method: "PUT",
     body: JSON.stringify({ name, newCost: Number(newCost) })
+  });
+}
+
+export async function setNameOverrideAPI(originalName, customName) {
+  return fetchWithAuth(`${BACKEND_URL}/api/admin/catalog/name-override`, {
+    method: "PUT",
+    body: JSON.stringify({ originalName, customName })
   });
 }
 

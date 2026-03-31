@@ -11,7 +11,8 @@ export class CustomCatalogService {
   #state = {
     customProducts: [],
     overrides: {}, // { "Nombre exacto del producto": newCost }
-    images: {}     // { "Nombre exacto del producto": "/uploads/xx.jpg" }
+    images: {},    // { "Nombre exacto del producto": "/uploads/xx.jpg" }
+    nameOverrides: {} // { "Nombre exacto del producto": "Nuevo Nombre Frontend" }
   };
 
   /**
@@ -23,7 +24,8 @@ export class CustomCatalogService {
       const data = await fs.readFile(DATA_FILE, "utf-8");
       this.#state = JSON.parse(data);
       if (!this.#state.images) this.#state.images = {}; // migración automática
-      console.log(`[CUSTOM CATALOG] Cargado: ${this.#state.customProducts.length} custom, ${Object.keys(this.#state.overrides).length} overrides, ${Object.keys(this.#state.images).length} fotos`);
+      if (!this.#state.nameOverrides) this.#state.nameOverrides = {}; // migración automática
+      console.log(`[CUSTOM CATALOG] Cargado: ${this.#state.customProducts.length} custom, ${Object.keys(this.#state.overrides).length} overrides, ${Object.keys(this.#state.images).length} fotos, ${Object.keys(this.#state.nameOverrides).length} renombrados`);
     } catch (err) {
       if (err.code !== "ENOENT") {
         console.error("[CUSTOM CATALOG] Error de lectura:", err.message);
@@ -49,6 +51,10 @@ export class CustomCatalogService {
 
   getImages() {
     return this.#state.images;
+  }
+
+  getNameOverrides() {
+    return this.#state.nameOverrides;
   }
 
   getCustomProducts() {
@@ -113,6 +119,19 @@ export class CustomCatalogService {
       this.#state.images[productName] = imageUrl;
     } else {
       delete this.#state.images[productName];
+    }
+    await this.#save();
+  }
+
+  /**
+   * Define un nombre visual alternativo para un producto de Sheets
+   */
+  async setNameOverride(originalName, customName) {
+    if (!originalName) return;
+    if (customName && customName.trim() !== "") {
+      this.#state.nameOverrides[originalName] = customName.trim();
+    } else {
+      delete this.#state.nameOverrides[originalName];
     }
     await this.#save();
   }

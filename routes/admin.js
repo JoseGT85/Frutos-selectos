@@ -138,10 +138,17 @@ router.use(security.requireAdmin());
 
 // Configuración de Multer para almacenar fotos físicas
 const storage = multer.diskStorage({
-  destination: async (req, file, cb) => {
-    const uploadPath = path.join(process.cwd(), "public", "uploads");
-    await fs.promises.mkdir(uploadPath, { recursive: true });
-    cb(null, uploadPath);
+  destination: (req, file, cb) => {
+    try {
+      const uploadPath = path.join(process.cwd(), "public", "uploads");
+      if (!fs.existsSync(uploadPath)) {
+        fs.mkdirSync(uploadPath, { recursive: true });
+      }
+      cb(null, uploadPath);
+    } catch (err) {
+      console.error("> Error Multer Mkdir:", err);
+      cb(err);
+    }
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
@@ -195,6 +202,17 @@ router.put("/catalog/override", async (req, res) => {
     } else {
       await customCatalog.removeOverride(name);
     }
+    if (_catalogRef) _catalogRef.invalidate();
+    res.json({ ok: true });
+  } catch(err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+router.put("/catalog/name-override", async (req, res) => {
+  try {
+    const { originalName, customName } = req.body;
+    await customCatalog.setNameOverride(originalName, customName);
     if (_catalogRef) _catalogRef.invalidate();
     res.json({ ok: true });
   } catch(err) {
