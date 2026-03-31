@@ -1,0 +1,105 @@
+// ═══════════════════════════════════════════════════════════════════════════
+//  DIFRUMARKET — Custom Catalog Service
+//  Gestión de productos manuales y sobrescrituras de precio locales (persistente)
+// ═══════════════════════════════════════════════════════════════════════════
+import fs from "fs/promises";
+import path from "path";
+
+const DATA_FILE = path.join(process.cwd(), "data", "custom_catalog.json");
+
+export class CustomCatalogService {
+  #state = {
+    customProducts: [],
+    overrides: {} // { "Nombre exacto del producto": newCost }
+  };
+
+  /**
+   * Carga el estado desde el disco al inicializarse
+   */
+  async init() {
+    try {
+      await fs.mkdir(path.dirname(DATA_FILE), { recursive: true });
+      const data = await fs.readFile(DATA_FILE, "utf-8");
+      this.#state = JSON.parse(data);
+      console.log(`[CUSTOM CATALOG] Cargado: ${this.#state.customProducts.length} productos manuales, ${Object.keys(this.#state.overrides).length} overrides`);
+    } catch (err) {
+      if (err.code !== "ENOENT") {
+        console.error("[CUSTOM CATALOG] Error de lectura:", err.message);
+      }
+      // Si no existe, se mantiene el estado vacío y se guardará al primer cambio
+    }
+  }
+
+  async #save() {
+    try {
+      await fs.mkdir(path.dirname(DATA_FILE), { recursive: true });
+      await fs.writeFile(DATA_FILE, JSON.stringify(this.#state, null, 2), "utf-8");
+    } catch (err) {
+      console.error("[CUSTOM CATALOG] Error guardando:", err.message);
+    }
+  }
+
+  // ─── API Lógica ────────────────────────────────────────────────────────────
+
+  getOverrides() {
+    return this.#state.overrides;
+  }
+
+  getCustomProducts() {
+    return this.#state.customProducts;
+  }
+
+  /**
+   * Agrega o actualiza un producto manual.
+   */
+  async addCustomProduct(product) {
+    if (!product.id) {
+      product.id = `custom_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    }
+    
+    product.isCustom = true; // Flag para el frontend
+    
+    const idx = this.#state.customProducts.findIndex(p => p.id === product.id);
+    if (idx > -1) {
+      this.#state.customProducts[idx] = { ...this.#state.customProducts[idx], ...product };
+    } else {
+      this.#state.customProducts.push(product);
+    }
+    
+    await this.#save();
+    return product;
+  }
+
+  /**
+   * Elimina un producto manual
+   */
+  async deleteCustomProduct(id) {
+    this.#state.customProducts = this.#state.customProducts.filter(p => p.id !== id);
+    await this.#save();
+  }
+
+  /**
+   * Establece un precio sobrescrito. Útil para productos bajados de Sheets.
+   * Usamos el "name" como key firme.
+   */
+  async setOverride(productName, newCost) {
+    if (!productName || newCost <= 0) return;
+    this.#state.overrides[productName] = Number(newCost);
+    await this.#save();
+  }
+
+  /**
+   * Elimina un override, devolviendo el producto a su precio de Sheets.
+   */
+  async removeOverride(productName) {
+    if (this.#state.overrides[productName]) {
+      delete this.#state.overrides[productName];
+      await this.#save();
+    }
+  }
+}
+
+// Instancia global en memoria
+export const customCatalog = new CustomCatalogService();
+// Autocargar
+customCatalog.init();

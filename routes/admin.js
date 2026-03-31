@@ -10,6 +10,7 @@ import { SecurityMiddleware } from "../security/middleware.js";
 import { kbService }          from "../kb-service.js";
 import { settings }           from "../settings-service.js";
 import { responseCache }      from "../response-cache.js";
+import { customCatalog }      from "../custom-catalog-service.js";
 
 const router   = Router();
 const security = new SecurityMiddleware();
@@ -131,6 +132,42 @@ router.post("/chat", async (req, res) => {
 // A partir de acá todas las rutas requieren JWT
 // ═══════════════════════════════════════════════════════════════════════════
 router.use(security.requireAdmin());
+
+// ── CATÁLOGO HÍBRIDO (Custom y Overrides) ───────────────────────────────────
+router.post("/catalog/custom", async (req, res) => {
+  try {
+    const p = await customCatalog.addCustomProduct(req.body);
+    if (_catalogRef) _catalogRef.invalidate();
+    res.json({ ok: true, product: p });
+  } catch(err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+router.delete("/catalog/custom/:id", async (req, res) => {
+  try {
+    await customCatalog.deleteCustomProduct(req.params.id);
+    if (_catalogRef) _catalogRef.invalidate();
+    res.json({ ok: true });
+  } catch(err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+router.put("/catalog/override", async (req, res) => {
+  try {
+    const { name, newCost } = req.body;
+    if (newCost > 0) {
+      await customCatalog.setOverride(name, newCost);
+    } else {
+      await customCatalog.removeOverride(name);
+    }
+    if (_catalogRef) _catalogRef.invalidate();
+    res.json({ ok: true });
+  } catch(err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
 
 // ── GET /api/admin/metrics ───────────────────────────────────────────────
 router.get("/metrics", (req, res) => {

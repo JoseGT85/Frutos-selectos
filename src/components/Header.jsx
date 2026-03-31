@@ -1,6 +1,26 @@
 import { ShoppingCart } from "lucide-react";
+import { useState, useRef } from "react";
 
-export default function Header({ view, setView, cartCount, onOpenCart }) {
+export default function Header({ view, setView, cartCount, onOpenCart, onUnlockAdmin }) {
+  const [clicks, setClicks] = useState(0);
+  const clickTimeout = useRef(null);
+
+  const handleLogoClick = () => {
+    setClicks((c) => {
+      const next = c + 1;
+      if (next >= 5) {
+        onUnlockAdmin?.();
+        return 0;
+      }
+      return next;
+    });
+
+    if (clickTimeout.current) clearTimeout(clickTimeout.current);
+    clickTimeout.current = setTimeout(() => {
+      setClicks(0); // Reiniciar si tarda más de 1.5s entre clics
+    }, 1500);
+  };
+
   return (
     <header
       role="banner"
@@ -16,8 +36,12 @@ export default function Header({ view, setView, cartCount, onOpenCart }) {
         padding: "0 28px", height: 70,
         display: "flex", alignItems: "center", justifyContent: "space-between",
       }}>
-        {/* Logo */}
-        <div>
+        {/* Logo Oculto - 5 Clics para Admin */}
+        <div 
+          onClick={handleLogoClick} 
+          style={{ cursor: "pointer", userSelect: "none" }}
+          title={clicks > 0 ? `Clics: ${clicks}` : ""}
+        >
           <h1 className="serif" style={{
             fontSize: "1.45rem", fontWeight: 300,
             letterSpacing: "0.14em", color: "#e8e0d0",
@@ -41,14 +65,6 @@ export default function Header({ view, setView, cartCount, onOpenCart }) {
             aria-current={view === "catalog" ? "page" : undefined}
           >
             Catálogo
-          </button>
-          <button
-            className="nav-link"
-            onClick={() => setView("admin")}
-            style={{ color: view === "admin" ? "#c9a84c" : "#444", fontSize: "0.6rem" }}
-            aria-current={view === "admin" ? "page" : undefined}
-          >
-            ⚙ Admin
           </button>
 
           {/* Cart button */}

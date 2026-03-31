@@ -3,6 +3,7 @@
 //  Parseo de Google Sheets + cache con TTL + cálculo de precio de venta
 // ═══════════════════════════════════════════════════════════════════════════
 import { JSDOM } from "jsdom";
+import { customCatalog } from "./custom-catalog-service.js";
 
 const SHEETS_URL  = process.env.GOOGLE_SHEETS_URL || "";
 const CACHE_TTL   = Number(process.env.CACHE_TTL_MS) || 15 * 60_000; // 15 min default
@@ -38,11 +39,15 @@ export class ProductCatalog {
     }
 
     try {
-      const products = await this.#fetchFromSheets();
+      let rawProducts = await this.#fetchFromSheets();
+      
+      // Combinar Sheets + Sobrescrituras y Productos Manuales
+      let products = this.#enrichWithLocalData(rawProducts);
+
       if (products.length > 0) {
         this.#cache = products;
         this.#cacheAt = Date.now();
-        console.log(`[CATALOG] 📡 ${products.length} productos cargados desde Sheets`);
+        console.log(`[CATALOG] 📡 ${rawProducts.length} traídos de Sheets, ${products.length - rawProducts.length} manuales, Cacheado.`);
         return this.#applyMargin(products);
       }
     } catch (err) {
@@ -55,8 +60,26 @@ export class ProductCatalog {
       return this.#applyMargin(this.#cache);
     }
 
-    console.log("[CATALOG] 📦 Usando datos fallback");
-    return this.#applyMargin(FALLBACK_PRODUCTS);
+    console.log("[CATALOG] 📦 Usando datos fallback fundidos");
+    return this.#applyMargin(this.#enrichWithLocalData(FALLBACK_PRODUCTS));
+  }
+
+  // ─── Mezcla con DB Local ───────────────────────────────────────────────────
+  #enrichWithLocalData(products) {
+    const overrides = customCatalog.getOverrides();
+    const custom    = customCatalog.getCustomProducts();
+
+    // 1. Sobrescribir costos de Sheets si hay coincidencia de nombre
+    const enriched = products.map(p => {
+      const pName = p.name.trim();
+      if (overrides[pName]) {
+        return { ...p, cost: overrides[pName], isOverride: true };
+      }
+      return p;
+    });
+
+    // 2. Agregar los manuales
+    return [...enriched, ...custom];
   }
 
   // ─── Sheet parser ──────────────────────────────────────────────────────────

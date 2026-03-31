@@ -1,14 +1,56 @@
 import { useState } from "react";
 import {
   RefreshCw, Lock, TrendingUp, DollarSign,
-  Eye, EyeOff, CheckCircle, AlertCircle
+  Eye, EyeOff, CheckCircle, AlertCircle, Plus, Edit2, Trash2
 } from "lucide-react";
 import { calcSalePrice, fmt } from "../utils/pricing.js";
+import { addCustomProductAPI, setCostOverrideAPI, deleteCustomProductAPI } from "../services/api.js";
 
 export default function AdminView({ products, margin, setMargin, syncing, syncStatus, onSync }) {
   const [showCosts, setShowCosts] = useState(false);
 
   const rangeStyle = { "--pct": `${margin}%` };
+
+  const handleOverrideCost = async (pName, currentCost) => {
+    const raw = window.prompt(`Modificar Costo Base (ARS) para:\n${pName}\n\nIngresá "0" para eliminar la sobrescritura y volver al costo de Sheets.`, currentCost);
+    if (!raw) return;
+    try {
+      await setCostOverrideAPI(pName, raw);
+      onSync();
+    } catch (err) {
+      alert("Error: " + err.message);
+    }
+  };
+
+  const handleDeleteCustom = async (id) => {
+    if (window.confirm("¿Seguro que querés eliminar definitivamente este producto manual?")) {
+      try {
+        await deleteCustomProductAPI(id);
+        onSync();
+      } catch (err) {
+        alert("Error: " + err.message);
+      }
+    }
+  };
+
+  const handleAddCustom = async () => {
+    const name = window.prompt("📦 Nombre del Producto Nuevo:");
+    if (!name) return;
+    const cost = window.prompt(`Costo Base (ARS) para ${name}:`);
+    if (!cost || isNaN(cost)) return alert("Costo inválido");
+    
+    // Opcionales con defaults
+    const category = window.prompt("Categoría (ej: Nueces, Semillas):", "Otros") || "Otros";
+    const unit = window.prompt("Presentación/Unidad (ej: 500g, 1kg):", "500g") || "500g";
+    const emoji = window.prompt("Emoji representativo:", "🌰") || "🌰";
+
+    try {
+      await addCustomProductAPI({ name, cost: Number(cost), category, unit, emoji });
+      onSync();
+    } catch (err) {
+      alert("Error: " + err.message);
+    }
+  };
 
   return (
     <main style={{ maxWidth: 1020, margin: "0 auto", padding: "52px 28px 100px" }}>
@@ -155,20 +197,33 @@ export default function AdminView({ products, margin, setMargin, syncing, syncSt
               Lista de Productos — {products.length} ítems
             </span>
           </div>
-          <button
-            onClick={() => setShowCosts(!showCosts)}
-            style={{
-              background: "none", border: "none", cursor: "pointer",
-              color: "#555", display: "flex", alignItems: "center", gap: 6,
-              fontSize: "0.6rem", letterSpacing: "0.15em", textTransform: "uppercase",
-              fontFamily: "Jost, sans-serif", transition: "color 0.2s",
-            }}
-            onMouseEnter={(e) => e.currentTarget.style.color = "#c9a84c"}
-            onMouseLeave={(e) => e.currentTarget.style.color = "#555"}
-          >
-            {showCosts ? <EyeOff size={12} /> : <Eye size={12} />}
-            {showCosts ? "Ocultar costos" : "Ver costos"}
-          </button>
+          <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
+            <button
+              onClick={handleAddCustom}
+              style={{
+                background: "none", border: "none", cursor: "pointer",
+                color: "#c9a84c", display: "flex", alignItems: "center", gap: 6,
+                fontSize: "0.6rem", letterSpacing: "0.15em", textTransform: "uppercase",
+                fontFamily: "Jost, sans-serif", transition: "color 0.2s",
+              }}
+            >
+              <Plus size={12} /> Añadir Manual
+            </button>
+            <button
+              onClick={() => setShowCosts(!showCosts)}
+              style={{
+                background: "none", border: "none", cursor: "pointer",
+                color: "#555", display: "flex", alignItems: "center", gap: 6,
+                fontSize: "0.6rem", letterSpacing: "0.15em", textTransform: "uppercase",
+                fontFamily: "Jost, sans-serif", transition: "color 0.2s",
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.color = "#c9a84c"}
+              onMouseLeave={(e) => e.currentTarget.style.color = "#555"}
+            >
+              {showCosts ? <EyeOff size={12} /> : <Eye size={12} />}
+              {showCosts ? "Ocultar costos" : "Ver costos"}
+            </button>
+          </div>
         </div>
 
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -201,7 +256,19 @@ export default function AdminView({ products, margin, setMargin, syncing, syncSt
                 >
                   <td style={{ padding: "14px 22px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                      <span style={{ fontSize: "1.25rem" }}>{p.emoji}</span>
+                      {p.isCustom && (
+                        <button 
+                          onClick={() => handleDeleteCustom(p.id)}
+                          style={{ background: "none", border: "none", cursor: "pointer", color: "#a55", padding: 0 }}
+                          title="Eliminar producto manual"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
+                      
+                      {!p.isCustom && <span style={{ fontSize: "1.25rem" }}>{p.emoji}</span>}
+                      {p.isCustom && <span style={{ fontSize: "1.25rem", filter: "sepia(1)" }}>{p.emoji}</span>}
+                      
                       <span className="serif" style={{ fontSize: "0.95rem", color: "#d8d0c0" }}>
                         {p.name}
                       </span>
@@ -215,7 +282,27 @@ export default function AdminView({ products, margin, setMargin, syncing, syncSt
                   </td>
                   {showCosts && (
                     <td style={{ padding: "14px 22px", fontSize: "0.85rem", color: "#666", fontFamily: "monospace" }}>
-                      {fmt(p.cost)}
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        {fmt(p.cost)}
+                        {p.isOverride && (
+                          <span style={{
+                            fontSize: "0.55rem", color: "#c9a84c",
+                            border: "1px solid rgba(201,168,76,0.3)",
+                            background: "rgba(201,168,76,0.05)",
+                            padding: "2px 5px", borderRadius: 3,
+                            letterSpacing: "0.08em"
+                          }}>MANUAL</span>
+                        )}
+                        {!p.isCustom && (
+                          <button 
+                            onClick={() => handleOverrideCost(p.name, p.cost)}
+                            style={{ background: "none", border: "none", cursor: "pointer", color: "#888", padding: 0 }}
+                            title="Sobrescribir costo"
+                          >
+                            <Edit2 size={12} />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   )}
                   <td style={{ padding: "14px 22px" }}>

@@ -283,3 +283,43 @@ a:focus:not(:focus-visible) {
     background: #151515;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/* WHATSAPP FLOAT BUTTON                                                     */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+.whatsapp-float {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 56px;
+  height: 56px;
+  background-color: #25D366;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 24px rgba(37, 211, 102, 0.35);
+  z-index: 1000;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.2s;
+  text-decoration: none;
+}
+
+.whatsapp-float:hover {
+  transform: scale(1.1) rotate(-3deg);
+  background-color: #1EBE57;
+  color: white;
+}
+
+@media (max-width: 480px) {
+  .whatsapp-float {
+    bottom: 20px;
+    right: 20px;
+    width: 48px;
+    height: 48px;
+  }
+  .whatsapp-float svg {
+    width: 24px !important;
+    height: 24px !important;
+  }
+}

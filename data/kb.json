@@ -1,0 +1,47 @@
+[
+  {
+    "id": "kb1",
+    "cat": "faq",
+    "active": true,
+    "priority": 1,
+    "triggers": "horario,cuándo,cuando,atienden",
+    "question": "¿Cuál es el horario de atención?",
+    "answer": "Atendemos Lunes a Viernes de 9 a 18hs y Sábados de 9 a 13hs. Fuera de ese horario podés dejar tu mensaje y te respondemos al siguiente día hábil."
+  },
+  {
+    "id": "kb2",
+    "cat": "shipping",
+    "active": true,
+    "priority": 1,
+    "triggers": "envío,envio,mandan,despacho,llega",
+    "question": "¿Hacen envíos a todo el país?",
+    "answer": "Sí, enviamos a todo el país con Andreani y OCA. El costo varía según destino y peso. Los envíos salen dentro de las 24-48hs de confirmado el pago."
+  },
+  {
+    "id": "kb3",
+    "cat": "payment",
+    "active": true,
+    "priority": 1,
+    "triggers": "pago,pagar,transferencia,mercadopago,tarjeta",
+    "question": "¿Cómo puedo pagar?",
+    "answer": "Aceptamos transferencia bancaria, MercadoPago (débito, crédito y cuotas) y efectivo en retiros."
+  },
+  {
+    "id": "kb4",
+    "cat": "products",
+    "active": true,
+    "priority": 1,
+    "triggers": "vencimiento,vence,duran,fecha",
+    "question": "¿Cuánto duran los productos?",
+    "answer": "Entre 6 y 12 meses dependiendo del producto. Se conservan mejor en lugar fresco y seco, idealmente en recipiente hermético."
+  },
+  {
+    "id": "kb9",
+    "cat": "ai_rules",
+    "active": true,
+    "priority": 0,
+    "triggers": "",
+    "question": "Tono y estilo",
+    "answer": "Respondé siempre en español argentino (vos, che). Sé amable pero conciso (máx 3-4 líneas). Usá emojis con moderación. Para pedidos, siempre derivá a finalizar por WhatsApp. No inventes precios ni disponibilidades. Si no sabés algo, decilo honestamente."
+  }
+]
