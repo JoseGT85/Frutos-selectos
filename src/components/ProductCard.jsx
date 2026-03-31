@@ -22,20 +22,31 @@ export default function ProductCard({ product, margin, inCart, onAdd, delay }) {
         display: "flex", alignItems: "center", justifyContent: "center",
         overflow: "hidden",
       }}>
-        {/* Radial glow */}
-        <div style={{
-          position: "absolute", inset: 0,
-          background: "radial-gradient(ellipse at 35% 45%, rgba(201,168,76,0.07) 0%, transparent 65%)",
-        }} aria-hidden="true" />
-        {/* Subtle grid texture */}
-        <div style={{
-          position: "absolute", inset: 0,
-          backgroundImage: "linear-gradient(rgba(201,168,76,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(201,168,76,0.03) 1px, transparent 1px)",
-          backgroundSize: "32px 32px",
-        }} aria-hidden="true" />
-        <span style={{ fontSize: "3.8rem", position: "relative", filter: "drop-shadow(0 4px 12px rgba(0,0,0,0.6))" }} aria-hidden="true">
-          {product.emoji}
-        </span>
+        {product.imageUrl ? (
+          <img 
+            src={product.imageUrl} 
+            alt={product.name}
+            style={{ width: "100%", height: "100%", objectFit: "cover" }} 
+            loading="lazy"
+          />
+        ) : (
+          <>
+            {/* Radial glow */}
+            <div style={{
+              position: "absolute", inset: 0,
+              background: "radial-gradient(ellipse at 35% 45%, rgba(201,168,76,0.07) 0%, transparent 65%)",
+            }} aria-hidden="true" />
+            {/* Subtle grid texture */}
+            <div style={{
+              position: "absolute", inset: 0,
+              backgroundImage: "linear-gradient(rgba(201,168,76,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(201,168,76,0.03) 1px, transparent 1px)",
+              backgroundSize: "32px 32px",
+            }} aria-hidden="true" />
+            <span style={{ fontSize: "3.8rem", position: "relative", filter: "drop-shadow(0 4px 12px rgba(0,0,0,0.6))" }} aria-hidden="true">
+              {product.emoji}
+            </span>
+          </>
+        )}
         <span className="tag-pill" style={{ position: "absolute", top: 14, right: 14 }}>
           {product.category}
         </span>

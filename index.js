@@ -21,6 +21,7 @@ import cors                       from "cors";
 import helmet                     from "helmet";
 import rateLimit                  from "express-rate-limit";
 import dotenv                     from "dotenv";
+import path                       from "path";
 
 import { AIOrchestrator }         from "./ai-orchestrator.js";
 import { ProductCatalog }         from "./catalog.js";
@@ -459,7 +460,7 @@ async function notifyAdmins(userId, username, userMsg, reply, agent) {
 const app = express();
 
 // Security headers
-app.use(helmet({ contentSecurityPolicy: false }));
+app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: false }));
 
 // CORS — permite que el admin panel (React) haga fetch a esta API
 app.use(cors({
@@ -469,6 +470,9 @@ app.use(cors({
 }));
 
 app.use(express.json({ limit: "512kb" }));
+
+// Archivos locales (imágenes) servidos estáticamente
+app.use("/uploads", express.static(path.join(process.cwd(), "public", "uploads")));
 
 // Rate limit global: 200 req/min
 app.use(rateLimit({ windowMs: 60_000, max: 200, standardHeaders: true, legacyHeaders: false }));

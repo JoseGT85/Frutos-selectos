@@ -67,19 +67,32 @@ export class ProductCatalog {
   // ─── Mezcla con DB Local ───────────────────────────────────────────────────
   #enrichWithLocalData(products) {
     const overrides = customCatalog.getOverrides();
+    const images    = customCatalog.getImages();
     const custom    = customCatalog.getCustomProducts();
 
-    // 1. Sobrescribir costos de Sheets si hay coincidencia de nombre
+    // 1. Sobrescribir costos y anexar fotos de Sheets si coinciden en el nombre
     const enriched = products.map(p => {
       const pName = p.name.trim();
+      let merged = { ...p };
+      
       if (overrides[pName]) {
-        return { ...p, cost: overrides[pName], isOverride: true };
+        merged.cost = overrides[pName];
+        merged.isOverride = true;
       }
-      return p;
+      if (images[pName]) {
+        merged.imageUrl = images[pName];
+      }
+      
+      return merged;
     });
 
-    // 2. Agregar los manuales
-    return [...enriched, ...custom];
+    // 2. Agregar los manuales y recabar sus fotos también
+    const customWithImages = custom.map(c => {
+      if (images[c.name.trim()]) c.imageUrl = images[c.name.trim()];
+      return c;
+    });
+
+    return [...enriched, ...customWithImages];
   }
 
   // ─── Sheet parser ──────────────────────────────────────────────────────────

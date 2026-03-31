@@ -85,3 +85,42 @@ export async function setCostOverrideAPI(name, newCost) {
     body: JSON.stringify({ name, newCost: Number(newCost) })
   });
 }
+
+// ── FOTOGRAFÍAS (Híbrido URL / Archivos Locales) ─────────────────────────────
+
+export async function setProductImageAPI(name, imageUrl) {
+  return fetchWithAuth(`${BACKEND_URL}/api/admin/catalog/image`, {
+    method: "PUT",
+    body: JSON.stringify({ name, imageUrl })
+  });
+}
+
+export async function uploadImageAPI(file) {
+  const formData = new FormData();
+  formData.append("image", file);
+  
+  // Custom fetch sin JSON headers porque es FormData (Multipart)
+  let res = await fetch(`${BACKEND_URL}/api/admin/catalog/upload`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${localStorage.getItem("difrumarket:adminToken")}`
+    },
+    body: formData
+  });
+
+  if (res.status === 401 || res.status === 403) {
+    const pwd = window.prompt("🔒 Contraseña para subir imagen:");
+    if (!pwd) throw new Error("Cancelado");
+    await loginAdmin(pwd);
+    res = await fetch(`${BACKEND_URL}/api/admin/catalog/upload`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${localStorage.getItem("difrumarket:adminToken")}`
+      },
+      body: formData
+    });
+  }
+
+  if (!res.ok) throw new Error("Error al subir archivo");
+  return res.json();
+}

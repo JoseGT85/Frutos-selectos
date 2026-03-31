@@ -1,13 +1,15 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import {
   RefreshCw, Lock, TrendingUp, DollarSign,
-  Eye, EyeOff, CheckCircle, AlertCircle, Plus, Edit2, Trash2
+  Eye, EyeOff, CheckCircle, AlertCircle, Plus, Edit2, Trash2, Image as ImageIcon, Link2
 } from "lucide-react";
 import { calcSalePrice, fmt } from "../utils/pricing.js";
-import { addCustomProductAPI, setCostOverrideAPI, deleteCustomProductAPI } from "../services/api.js";
+import { addCustomProductAPI, setCostOverrideAPI, deleteCustomProductAPI, uploadImageAPI, setProductImageAPI } from "../services/api.js";
 
 export default function AdminView({ products, margin, setMargin, syncing, syncStatus, onSync }) {
   const [showCosts, setShowCosts] = useState(false);
+  const fileInputRef = React.useRef(null);
+  const [uploadingName, setUploadingName] = useState(null);
 
   const rangeStyle = { "--pct": `${margin}%` };
 
@@ -49,6 +51,35 @@ export default function AdminView({ products, margin, setMargin, syncing, syncSt
       onSync();
     } catch (err) {
       alert("Error: " + err.message);
+    }
+  };
+
+  const handleUrlAction = async (pName) => {
+    const act = window.prompt(`1 = Pegar nueva URL para ${pName}\n2 = Eliminar foto actual\n\nIngresá 1 o 2:`);
+    if (act === "1") {
+      const url = window.prompt("Pegá el enlace directo a la imagen:");
+      if (url) {
+        try { await setProductImageAPI(pName, url); onSync(); }
+        catch (e) { alert("Error: " + e.message); }
+      }
+    } else if (act === "2") {
+      try { await setProductImageAPI(pName, ""); onSync(); }
+      catch (e) { alert("Error: " + e.message); }
+    }
+  };
+
+  const handleFileChange = async (e, pName) => {
+    const file = e.target.files?.[0];
+    if (!file || !pName) return;
+    try {
+      const { imageUrl } = await uploadImageAPI(file);
+      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
+      await setProductImageAPI(pName, BACKEND_URL + imageUrl);
+      onSync();
+    } catch (err) {
+      alert("Error al subir foto: " + err.message);
+    } finally {
+      e.target.value = "";
     }
   };
 
@@ -302,6 +333,20 @@ export default function AdminView({ products, margin, setMargin, syncing, syncSt
                             <Edit2 size={12} />
                           </button>
                         )}
+                        <label 
+                          style={{ cursor: "pointer", color: p.imageUrl && p.imageUrl.includes("/uploads") ? "#c9a84c" : "#888", marginLeft: 8, display: "flex", alignItems: "center" }}
+                          title="Subir archivo desde PC"
+                        >
+                          <ImageIcon size={13} />
+                          <input type="file" accept="image/*" hidden onChange={(e) => handleFileChange(e, p.name)} />
+                        </label>
+                        <button 
+                          onClick={() => handleUrlAction(p.name)}
+                          style={{ background: "none", border: "none", cursor: "pointer", color: p.imageUrl && !p.imageUrl.includes("/uploads") ? "#ccc" : "#555", padding: 0, marginLeft: 8 }}
+                          title="Pegar URL de Internet / Borrar"
+                        >
+                          <Link2 size={13} />
+                        </button>
                       </div>
                     </td>
                   )}

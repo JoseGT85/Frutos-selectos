@@ -18,6 +18,7 @@
     "jsdom": "^29.0.1",
     "jsonwebtoken": "^9.0.3",
     "lucide-react": "^0.468.0",
+    "multer": "^2.1.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "telegraf": "^4.16.3"

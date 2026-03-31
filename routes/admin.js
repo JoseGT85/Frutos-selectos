@@ -6,6 +6,7 @@
 import { Router }             from "express";
 import fs                     from "fs";
 import path                   from "path";
+import multer                 from "multer";
 import { SecurityMiddleware } from "../security/middleware.js";
 import { kbService }          from "../kb-service.js";
 import { settings }           from "../settings-service.js";
@@ -134,6 +135,38 @@ router.post("/chat", async (req, res) => {
 router.use(security.requireAdmin());
 
 // ── CATÁLOGO HÍBRIDO (Custom y Overrides) ───────────────────────────────────
+
+// Configuración de Multer para almacenar fotos físicas
+const storage = multer.diskStorage({
+  destination: async (req, file, cb) => {
+    const uploadPath = path.join(process.cwd(), "public", "uploads");
+    await fs.promises.mkdir(uploadPath, { recursive: true });
+    cb(null, uploadPath);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname);
+    cb(null, "product" + '-' + uniqueSuffix + ext);
+  }
+});
+const upload = multer({ storage });
+
+router.post("/catalog/upload", upload.single("image"), (req, res) => {
+  if (!req.file) return res.status(400).json({ ok: false, error: "No se encontró el archivo" });
+  res.json({ ok: true, imageUrl: `/uploads/${req.file.filename}` });
+});
+
+router.put("/catalog/image", async (req, res) => {
+  try {
+    const { name, imageUrl } = req.body;
+    await customCatalog.setProductImage(name, imageUrl);
+    if (_catalogRef) _catalogRef.invalidate();
+    res.json({ ok: true });
+  } catch(err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 router.post("/catalog/custom", async (req, res) => {
   try {
     const p = await customCatalog.addCustomProduct(req.body);

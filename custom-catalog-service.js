@@ -10,7 +10,8 @@ const DATA_FILE = path.join(process.cwd(), "data", "custom_catalog.json");
 export class CustomCatalogService {
   #state = {
     customProducts: [],
-    overrides: {} // { "Nombre exacto del producto": newCost }
+    overrides: {}, // { "Nombre exacto del producto": newCost }
+    images: {}     // { "Nombre exacto del producto": "/uploads/xx.jpg" }
   };
 
   /**
@@ -21,7 +22,8 @@ export class CustomCatalogService {
       await fs.mkdir(path.dirname(DATA_FILE), { recursive: true });
       const data = await fs.readFile(DATA_FILE, "utf-8");
       this.#state = JSON.parse(data);
-      console.log(`[CUSTOM CATALOG] Cargado: ${this.#state.customProducts.length} productos manuales, ${Object.keys(this.#state.overrides).length} overrides`);
+      if (!this.#state.images) this.#state.images = {}; // migración automática
+      console.log(`[CUSTOM CATALOG] Cargado: ${this.#state.customProducts.length} custom, ${Object.keys(this.#state.overrides).length} overrides, ${Object.keys(this.#state.images).length} fotos`);
     } catch (err) {
       if (err.code !== "ENOENT") {
         console.error("[CUSTOM CATALOG] Error de lectura:", err.message);
@@ -43,6 +45,10 @@ export class CustomCatalogService {
 
   getOverrides() {
     return this.#state.overrides;
+  }
+
+  getImages() {
+    return this.#state.images;
   }
 
   getCustomProducts() {
@@ -96,6 +102,19 @@ export class CustomCatalogService {
       delete this.#state.overrides[productName];
       await this.#save();
     }
+  }
+
+  /**
+   * Define la URL o Path de imagen de cualquier producto.
+   */
+  async setProductImage(productName, imageUrl) {
+    if (!productName) return;
+    if (imageUrl) {
+      this.#state.images[productName] = imageUrl;
+    } else {
+      delete this.#state.images[productName];
+    }
+    await this.#save();
   }
 }
 
