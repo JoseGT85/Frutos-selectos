@@ -483,6 +483,7 @@ app.get("/health", (_, res) => res.json({
   uptime:    Math.round(process.uptime()),
   margin:    settings.getMargin(),
   kb:        kbService.getStats(),
+  catalogSync: catalog.getSyncStatus(),
   timestamp: new Date().toISOString(),
 }));
 

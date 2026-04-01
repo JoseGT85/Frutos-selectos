@@ -14,7 +14,7 @@ import {
 // ═══════════════════════════════════════════════════════════════
 const CONFIG = {
   // ⚠️ URLs y credenciales movidas a variables de entorno por seguridad
-  SHEETS_URL: import.meta.env.VITE_SHEETS_URL || "",
+  SHEETS_URL: import.meta.env.VITE_SHEETS_URL || "https://docs.google.com/spreadsheets/u/0/d/e/2PACX-1vSG8HiC02weCi6VOkBZO_DvChdbviKFEeE2WCJEZ-9awel9e4BqFnuvT8iXdRXNMK6orDFk8eiVibmX/pubhtml?gid=0&single=true",
   MARGIN: Number(import.meta.env.VITE_MARGIN_DEFAULT) || 30,
   WHATSAPP: import.meta.env.VITE_WHATSAPP_NUMBER || "5491112345678",
   BUSINESS_NAME: import.meta.env.VITE_BUSINESS_NAME || "Frutos Selectos · DIFRUMARKET",
@@ -94,32 +94,76 @@ function inferCat(name) {
 }
 async function fetchSheet() {
   try {
-    const res=await fetch(CONFIG.SHEETS_URL,{mode:"cors"});
-    const html=await res.text();
-    const doc=new DOMParser().parseFromString(html,"text/html");
-    const rows=Array.from(doc.querySelectorAll("table tr"));
-    let hi=-1,rc=-1,nc=0,uc=-1;
-    for(let i=0;i<rows.length;i++){
-      const cells=Array.from(rows[i].querySelectorAll("td,th")).map(c=>c.textContent.trim().toLowerCase());
-      const ri=cells.findIndex(c=>c.includes("remito"));
-      if(ri>-1){hi=i;rc=ri;uc=cells.findIndex(c=>/kg|g\b|unidad|presentac/.test(c));nc=cells.findIndex(c=>/producto|artículo|descripción|nombre/.test(c));if(nc===-1)nc=0;break;}
+    const res = await fetch(CONFIG.SHEETS_URL);
+    if (!res.ok) throw new Error("Error HTTP");
+    const csvText = await res.text();
+    
+    // Helper para parsear CSV respetando comillas (inline para el frontend)
+    const parseCSV = (text) => {
+      const rows = [];
+      let currentRow = [];
+      let inQuotes = false;
+      let currentValue = "";
+      for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        const nextChar = text[i + 1];
+        if (inQuotes) {
+          if (char === '"' && nextChar === '"') { currentValue += '"'; i++; }
+          else if (char === '"') inQuotes = false;
+          else currentValue += char;
+        } else {
+          if (char === '"') inQuotes = true;
+          else if (char === ',') { currentRow.push(currentValue); currentValue = ""; }
+          else if (char === '\n' || char === '\r') {
+            currentRow.push(currentValue);
+            if (currentRow.length > 1 || currentRow[0] !== "") rows.push(currentRow);
+            currentRow = []; currentValue = "";
+            if (char === '\r' && nextChar === '\n') i++;
+          } else currentValue += char;
+        }
+      }
+      if (currentValue || currentRow.length > 0) { currentRow.push(currentValue); rows.push(currentRow); }
+      return rows;
+    };
+
+    const rows = parseCSV(csvText);
+    let hi = -1, rc = -1, nc = 0, uc = -1;
+
+    for (let i = 0; i < rows.length; i++) {
+      const cells = rows[i].map(c => c.toLowerCase());
+      const ri = cells.findIndex(c => c.includes("remito"));
+      if (ri > -1) {
+        hi = i; rc = ri;
+        uc = cells.findIndex(c => /kg|g\b|unidad|presentac/.test(c));
+        nc = cells.findIndex(c => /producto|artículo|descripción|nombre/.test(c));
+        if (nc === -1) nc = 0;
+        break;
+      }
     }
-    if(hi===-1||rc===-1) return {products:FALLBACK,source:"fallback"};
-    const products=[];
-    for(let i=hi+1;i<rows.length;i++){
-      const cells=Array.from(rows[i].querySelectorAll("td,th"));
-      if(cells.length<=rc) continue;
-      const name=cells[nc]?.textContent.trim();
-      if(!name||name.length<2) continue;
-      const raw=cells[rc]?.textContent.trim().replace(/[^0-9,.]/g,"").replace(",",".");
-      const cost=parseFloat(raw);
-      if(!cost||cost<=0) continue;
-      const unit=uc>-1?cells[uc]?.textContent.trim()||"1kg":"1kg";
-      const {category,emoji}=inferCat(name);
-      products.push({id:i,name,cost,category,unit,emoji});
+
+    if (hi === -1 || rc === -1) return { products: FALLBACK, source: "fallback" };
+
+    const products = [];
+    for (let i = hi + 1; i < rows.length; i++) {
+      const cells = rows[i];
+      if (cells.length <= rc) continue;
+      const name = cells[nc]?.trim();
+      if (!name || name.length < 2) continue;
+      const raw = cells[rc]?.trim()
+        .replace(/[^0-9,.]/g, "")
+        .replace(/\./g, "")
+        .replace(",", ".");
+      const cost = parseFloat(raw);
+      if (isNaN(cost) || cost <= 0) continue;
+      const unit = uc > -1 ? cells[uc]?.trim() || "1kg" : "1kg";
+      const { category, emoji } = inferCat(name);
+      products.push({ id: i, name, cost, category, unit, emoji });
     }
-    return products.length>5?{products,source:"sheets"}:{products:FALLBACK,source:"fallback"};
-  } catch { return {products:FALLBACK,source:"fallback"}; }
+    return products.length > 5 ? { products, source: "sheets" } : { products: FALLBACK, source: "fallback" };
+  } catch (err) {
+    console.error("Error fetching CSV:", err);
+    return { products: FALLBACK, source: "fallback" };
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -379,11 +423,36 @@ export default function App() {
     loadKB().then(e=>{setKb(e);setKbReady(true);});
   },[]);
 
-  const doSync=async()=>{
-    setSyncing(true);setSyncOk(null);
-    try{const{products:p,source}=await fetchSheet();setProducts(p);setSrc(source);setSyncOk(true);}
-    catch{setSyncOk(false);}
-    finally{setSyncing(false);setLoading(false);}
+  const doSync = async () => {
+    setSyncing(true);
+    setSyncOk(null);
+    try {
+      // Intentar notificar al backend para que limpie su cache si somos admin
+      if (adminAuth && adminToken) {
+        try {
+          await fetch(`${CONFIG.BACKEND_URL}/api/admin/catalog/sync`, {
+            method: "POST",
+            headers: { 
+              "Authorization": `Bearer ${adminToken}`,
+              "Content-Type": "application/json"
+            }
+          });
+        } catch (e) {
+          console.warn("[Sync] No se pudo notificar al backend:", e.message);
+        }
+      }
+
+      const { products: p, source } = await fetchSheet();
+      setProducts(p);
+      setSrc(source);
+      setSyncOk(true);
+    } catch (err) {
+      console.error("[Sync] Error:", err.message);
+      setSyncOk(false);
+    } finally {
+      setSyncing(false);
+      setLoading(false);
+    }
   };
 
   // KB — guarda localmente Y sincroniza al backend
@@ -715,6 +784,11 @@ function Admin({products,margin,setMargin,syncing,syncOk,src,onSync,kb,onKb,kbRe
       {syncOk===true&&(
         <div style={{background:src==="sheets"?"rgba(100,180,100,0.05)":"rgba(200,150,50,0.05)",border:`1px solid ${src==="sheets"?"rgba(100,180,100,0.18)":"rgba(200,150,50,0.18)"}`,borderRadius:2,padding:"10px 16px",marginBottom:24,display:"flex",alignItems:"center",gap:10,fontSize:"0.68rem",color:src==="sheets"?"#80b880":"#c9a84c",letterSpacing:"0.06em"}}>
           <CheckCircle size={13}/>{src==="sheets"?`✅ Google Sheets · ${products.length} productos · columna "remito" + ${margin}% margen`:`⚠️ Datos offline (${products.length} productos).`}
+        </div>
+      )}
+      {syncOk===false&&(
+        <div style={{background:"rgba(200,80,80,0.05)",border:"1px solid rgba(200,80,80,0.18)",borderRadius:2,padding:"10px 16px",marginBottom:24,display:"flex",alignItems:"center",gap:10,fontSize:"0.68rem",color:"#c97a7a",letterSpacing:"0.06em"}}>
+          <AlertCircle size={13}/>❌ Error al sincronizar: El listado no está disponible o el formato ha cambiado. Se están usando datos locales/fallback.
         </div>
       )}
       <div style={{display:"flex",borderBottom:"1px solid rgba(255,255,255,0.05)",marginBottom:32,overflowX:"auto"}}>

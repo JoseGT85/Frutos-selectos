@@ -2,16 +2,23 @@
 //  DIFRUMARKET — Product Catalog Service
 //  Parseo de Google Sheets + cache con TTL + cálculo de precio de venta
 // ═══════════════════════════════════════════════════════════════════════════
-import { JSDOM } from "jsdom";
 import { customCatalog } from "./custom-catalog-service.js";
 
-const SHEETS_URL  = process.env.GOOGLE_SHEETS_URL || "";
+// URL por defecto actualizada al nuevo listado proporcionado por el usuario
+const DEFAULT_SHEETS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSG8HiC02weCi6VOkBZO_DvChdbviKFEeE2WCJEZ-9awel9e4BqFnuvT8iXdRXNMK6orDFk8eiVibmX/pub?gid=0&single=true&output=csv";
+const SHEETS_URL  = process.env.GOOGLE_SHEETS_URL || DEFAULT_SHEETS_URL;
 const CACHE_TTL   = Number(process.env.CACHE_TTL_MS) || 15 * 60_000; // 15 min default
 
 export class ProductCatalog {
   #margin;
   #cache    = null;
   #cacheAt  = 0;
+  #syncStatus = { 
+    ok: true, 
+    lastSync: null, 
+    error: null, 
+    source: "init" 
+  };
 
   constructor(margin = 30) {
     this.#margin = margin;
@@ -26,6 +33,13 @@ export class ProductCatalog {
   invalidate() {
     this.#cache = null;
     this.#cacheAt = 0;
+  }
+
+  getSyncStatus() {
+    return {
+      ...this.#syncStatus,
+      cacheAge: this.#cacheAt ? Math.round((Date.now() - this.#cacheAt) / 1000) : null
+    };
   }
 
   /**
@@ -47,16 +61,18 @@ export class ProductCatalog {
       if (products.length > 0) {
         this.#cache = products;
         this.#cacheAt = Date.now();
+        this.#syncStatus = { ok: true, lastSync: new Date().toISOString(), error: null, source: "sheets" };
         console.log(`[CATALOG] 📡 ${rawProducts.length} traídos de Sheets, ${products.length - rawProducts.length} manuales, Cacheado.`);
         return this.#applyMargin(products);
       }
     } catch (err) {
+      this.#syncStatus = { ok: false, lastSync: new Date().toISOString(), error: err.message, source: "error" };
       console.error("[CATALOG] Error fetch:", err.message);
     }
 
-    // Fallback: devolver cache viejo o datos mock
+    // Fallback: devolver cache viejo (si existe) pero marcar error
     if (this.#cache) {
-      console.log("[CATALOG] ⚠️ Usando cache expirado");
+      console.log("[CATALOG] ⚠️ Usando cache expirado por error en sync");
       return this.#applyMargin(this.#cache);
     }
 
@@ -109,52 +125,109 @@ export class ProductCatalog {
   async #fetchFromSheets() {
     if (!SHEETS_URL) return FALLBACK_PRODUCTS;
 
-    const res  = await fetch(SHEETS_URL);
-    const html = await res.text();
-    const dom  = new JSDOM(html);
-    const doc  = dom.window.document;
-    const rows = Array.from(doc.querySelectorAll("table tr"));
+    try {
+      const res = await fetch(SHEETS_URL);
+      if (!res.ok) throw new Error(`HTTP ${res.status} al obtener la hoja de cálculo`);
+      
+      const csvText = await res.text();
+      const rows = this.#parseCSV(csvText);
 
-    let headerIdx = -1, costCol = -1, nameCol = 0, unitCol = -1;
+      let headerIdx = -1, costCol = -1, nameCol = 0, unitCol = -1;
 
-    for (let i = 0; i < rows.length; i++) {
-      const cells = Array.from(rows[i].querySelectorAll("td,th"))
-        .map(c => c.textContent.trim().toLowerCase());
-      const ri = cells.findIndex(c => c.includes("remito"));
-      if (ri > -1) {
-        headerIdx = i;
-        costCol = ri;
-        unitCol = cells.findIndex(c => /kg|g\b|unidad|presentac/.test(c));
-        nameCol = cells.findIndex(c => /producto|artículo|descripción|nombre/.test(c));
-        if (nameCol === -1) nameCol = 0;
-        break;
+      // Buscar encabezado
+      for (let i = 0; i < rows.length; i++) {
+        const cells = rows[i].map(c => c.toLowerCase());
+        const ri = cells.findIndex(c => c.includes("remito"));
+        if (ri > -1) {
+          headerIdx = i;
+          costCol = ri;
+          unitCol = cells.findIndex(c => /kg|g\b|unidad|presentac/.test(c));
+          nameCol = cells.findIndex(c => /producto|artículo|descripción|nombre/.test(c));
+          if (nameCol === -1) nameCol = 0;
+          break;
+        }
+      }
+
+      if (headerIdx === -1 || costCol === -1) {
+        throw new Error("No se pudo detectar la estructura de la hoja (falta columna 'remito')");
+      }
+
+      const products = [];
+      for (let i = headerIdx + 1; i < rows.length; i++) {
+        const cells = rows[i];
+        if (cells.length <= costCol) continue;
+
+        const name = cells[nameCol]?.trim();
+        if (!name || name.length < 2) continue;
+
+        // Limpieza de precio robusta ($ 18.862,95 -> 18862.95)
+        const raw = cells[costCol]?.trim()
+          .replace(/[^0-9,.]/g, "")
+          .replace(/\./g, "")
+          .replace(",", ".");
+          
+        const cost = parseFloat(raw);
+        if (isNaN(cost) || cost <= 0) continue;
+
+        const unit = unitCol > -1
+          ? cells[unitCol]?.trim() || "1kg"
+          : "1kg";
+        const { category, emoji } = inferCategory(name);
+
+        products.push({ id: i, name, cost, category, unit, emoji });
+      }
+
+      return products.length > 5 ? products : FALLBACK_PRODUCTS;
+    } catch (err) {
+      console.error("[CATALOG] Critical sync error:", err.message);
+      throw err;
+    }
+  }
+
+  // Helper simple para parsear CSV respetando comillas
+  #parseCSV(text) {
+    const rows = [];
+    let currentRow = [];
+    let inQuotes = false;
+    let currentValue = "";
+
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+      const nextChar = text[i + 1];
+
+      if (inQuotes) {
+        if (char === '"' && nextChar === '"') {
+          currentValue += '"';
+          i++;
+        } else if (char === '"') {
+          inQuotes = false;
+        } else {
+          currentValue += char;
+        }
+      } else {
+        if (char === '"') {
+          inQuotes = true;
+        } else if (char === ',') {
+          currentRow.push(currentValue);
+          currentValue = "";
+        } else if (char === '\n' || char === '\r') {
+          currentRow.push(currentValue);
+          if (currentRow.length > 1 || currentRow[0] !== "") {
+            rows.push(currentRow);
+          }
+          currentRow = [];
+          currentValue = "";
+          if (char === '\r' && nextChar === '\n') i++;
+        } else {
+          currentValue += char;
+        }
       }
     }
-
-    if (headerIdx === -1 || costCol === -1) return FALLBACK_PRODUCTS;
-
-    const products = [];
-    for (let i = headerIdx + 1; i < rows.length; i++) {
-      const cells = Array.from(rows[i].querySelectorAll("td,th"));
-      if (cells.length <= costCol) continue;
-
-      const name = cells[nameCol]?.textContent.trim();
-      if (!name || name.length < 2) continue;
-
-      const raw = cells[costCol]?.textContent.trim()
-        .replace(/[^0-9,.]/g, "").replace(",", ".");
-      const cost = parseFloat(raw);
-      if (!cost || cost <= 0) continue;
-
-      const unit = unitCol > -1
-        ? cells[unitCol]?.textContent.trim() || "1kg"
-        : "1kg";
-      const { category, emoji } = inferCategory(name);
-
-      products.push({ id: i, name, cost, category, unit, emoji });
+    if (currentValue || currentRow.length > 0) {
+      currentRow.push(currentValue);
+      rows.push(currentRow);
     }
-
-    return products.length > 5 ? products : FALLBACK_PRODUCTS;
+    return rows;
   }
 
   // ─── Aplicar margen ────────────────────────────────────────────────────────

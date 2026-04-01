@@ -220,6 +220,20 @@ router.put("/catalog/name-override", async (req, res) => {
   }
 });
 
+// ── POST /api/admin/catalog/sync ─────────────────────────────────────────
+router.post("/catalog/sync", (req, res) => {
+  try {
+    if (_catalogRef) {
+      _catalogRef.invalidate();
+      res.json({ ok: true, message: "Cache invalidado. El catálogo se sincronizará en el próximo acceso." });
+    } else {
+      res.status(500).json({ ok: false, error: "Servicio de catálogo no disponible" });
+    }
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // ── GET /api/admin/metrics ───────────────────────────────────────────────
 router.get("/metrics", (req, res) => {
   const metrics = _orchestratorRef
@@ -230,6 +244,7 @@ router.get("/metrics", (req, res) => {
     ok: true,
     metrics,
     kb:         kbService.getStats(),
+    catalogSync: _catalogRef ? _catalogRef.getSyncStatus() : null,
     cache:      responseCache.getStats(),
     margin:     settings.getMargin(),
     uptime:     Math.round(process.uptime()),
@@ -280,6 +295,7 @@ router.get("/status", (req, res) => {
     },
     agents,
     kb:        kbService.getStats(),
+    catalogSync: _catalogRef ? _catalogRef.getSyncStatus() : null,
     cache:     responseCache.getStats(),
     margin:    settings.getMargin(),
     uptime:    Math.round(process.uptime()),
