@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Plus, Truck } from "lucide-react";
 import { calcSalePrice, fmt } from "../utils/pricing.js";
 
@@ -9,6 +10,8 @@ export default function ProductCard({ product, margin, inCart, onAdd, delay }) {
     Mezclas: "linear-gradient(135deg, #0d1308 0%, #060a04 100%)",
     Frutas:  "linear-gradient(135deg, #150a0a 0%, #0a0505 100%)",
   }[product.category] || "linear-gradient(135deg, #111 0%, #080808 100%)";
+
+  const [imgError, setImgError] = useState(false);
 
   return (
     <article
@@ -22,12 +25,13 @@ export default function ProductCard({ product, margin, inCart, onAdd, delay }) {
         display: "flex", alignItems: "center", justifyContent: "center",
         overflow: "hidden",
       }}>
-        {product.imageUrl ? (
+        {product.imageUrl && !imgError ? (
           <img 
             src={product.imageUrl} 
             alt={product.name}
             style={{ width: "100%", height: "100%", objectFit: "cover" }} 
             loading="lazy"
+            onError={() => setImgError(true)}
           />
         ) : (
           <>

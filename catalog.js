@@ -232,7 +232,7 @@ export class ProductCatalog {
         const presentation = cells[presCol]?.trim() || "";
         const unit = presentation || "Bulto";
 
-        const { category, emoji } = inferCategory(name);
+        const { category, emoji, imageUrl } = inferCategory(name);
         const { peso_kg, tipo_producto } = inferWeightAndType(unit, name);
 
         productId++;
@@ -244,6 +244,7 @@ export class ProductCatalog {
           category,
           unit,                  // Presentación (ej: "CAJA X 10 KG")
           emoji,
+          imageUrl,
           section: currentSection,
           peso_kg,
           tipo_producto,
@@ -317,17 +318,27 @@ export class ProductCatalog {
 // ─── Inferencia de categoría por nombre ──────────────────────────────────────
 function inferCategory(name) {
   const n = (name || "").toLowerCase();
-  if (/almendr|pecan|nuez|pistacho|anacardo|castaña|maní|macadam/i.test(n))
-    return { category: "Nueces", emoji: "🥜" };
-  if (/arándano|dátil|higo|pasa|damasco|ciruela|coco|goji/i.test(n))
-    return { category: "Frutas Secas", emoji: "🍇" };
-  if (/mix|mezcla|trail/i.test(n))
-    return { category: "Mezclas", emoji: "✨" };
-  if (/semilla|girasol|lino|chía|sésamo|zapallo/i.test(n))
-    return { category: "Semillas", emoji: "🌱" };
-  if (/granola|avena|cereal/i.test(n))
-    return { category: "Cereales", emoji: "🥣" };
-  return { category: "Otros", emoji: "🌿" };
+  
+  if (/almendr/i.test(n)) return { category: "Nueces", emoji: "🌰", imageUrl: "https://images.unsplash.com/photo-1508061253366-f7da158b6d46?w=600&q=80" };
+  if (/nuez|nueces/i.test(n)) return { category: "Nueces", emoji: "🥜", imageUrl: "https://images.unsplash.com/photo-1524593656068-fbac72624bb0?w=600&q=80" };
+  if (/pistacho/i.test(n)) return { category: "Nueces", emoji: "🫘", imageUrl: "https://images.unsplash.com/photo-1524593000379-d4729b2c4f99?w=600&q=80" };
+  if (/castaña|anacardo/i.test(n)) return { category: "Nueces", emoji: "🌿", imageUrl: "https://images.unsplash.com/photo-1726771517475-e7acdd34cd8a?w=600&q=80" };
+  if (/pecan|maní|macadam/i.test(n)) return { category: "Nueces", emoji: "🥜", imageUrl: "https://images.unsplash.com/photo-1626196340006-f89d9bedf1c6?w=600&q=80" };
+
+  if (/arándano/i.test(n)) return { category: "Frutas Secas", emoji: "🫐", imageUrl: "https://images.unsplash.com/photo-1642102903918-b97c37955bbf?w=600&q=80" };
+  if (/dátil/i.test(n)) return { category: "Frutas Secas", emoji: "🟤", imageUrl: "https://images.unsplash.com/photo-1691657917109-c6e027eac44a?w=600&q=80" };
+  if (/pasa/i.test(n)) return { category: "Frutas Secas", emoji: "🍇", imageUrl: "https://images.unsplash.com/photo-1621597121291-fa650ac736e5?w=600&q=80" };
+  if (/coco/i.test(n)) return { category: "Frutas Secas", emoji: "🥥", imageUrl: "https://images.unsplash.com/photo-1526656755455-89ffb578c740?w=600&q=80" };
+  if (/higo|damasco|ciruela|goji/i.test(n)) return { category: "Frutas Secas", emoji: "🍑", imageUrl: "https://images.unsplash.com/photo-1629738601425-494c3d6ba3e2?w=600&q=80" };
+
+  if (/mix|mezcla|trail/i.test(n)) return { category: "Mezclas", emoji: "✨", imageUrl: "https://images.unsplash.com/photo-1642073537056-20608544f111?w=600&q=80" };
+  
+  if (/chía|semilla/i.test(n)) return { category: "Semillas", emoji: "🌱", imageUrl: "https://images.unsplash.com/photo-1604768802835-899055f0e245?w=600&q=80" };
+  if (/girasol|lino|sésamo|zapallo/i.test(n)) return { category: "Semillas", emoji: "🌾", imageUrl: "https://images.unsplash.com/photo-1642497393633-a19e9231fb92?w=600&q=80" };
+
+  if (/granola|avena|cereal/i.test(n)) return { category: "Cereales", emoji: "🥣", imageUrl: "https://images.unsplash.com/photo-1559951585-645e730d3cf0?w=600&q=80" };
+
+  return { category: "Otros", emoji: "🌿", imageUrl: "https://images.unsplash.com/photo-1615485925873-7ecbbe90a866?w=600&q=80" };
 }
 
 // ─── Inferencia de peso y tipo_producto ──────────────────────────────────────
