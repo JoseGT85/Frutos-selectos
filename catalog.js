@@ -358,24 +358,24 @@ function inferWeightAndType(unit, name) {
 
 // ─── Datos fallback ──────────────────────────────────────────────────────────
 const rawFallbackParams = [
-  { id: 1,  name: "Almendras Natural",     cost: 2800, category: "Nueces",       unit: "500g", emoji: "🌰" },
-  { id: 2,  name: "Almendras Blanqueadas", cost: 3200, category: "Nueces",       unit: "500g", emoji: "🌰" },
-  { id: 3,  name: "Nueces Mariposa",       cost: 4500, category: "Nueces",       unit: "500g", emoji: "🥜" },
-  { id: 4,  name: "Pistachos Iraníes",     cost: 5800, category: "Nueces",       unit: "250g", emoji: "🫘" },
-  { id: 5,  name: "Anacardos Natural",     cost: 4200, category: "Nueces",       unit: "500g", emoji: "🌿" },
-  { id: 6,  name: "Maní Tostado Salado",   cost: 800,  category: "Nueces",       unit: "500g", emoji: "🥜" },
-  { id: 7,  name: "Pecán Entero",          cost: 6800, category: "Nueces",       unit: "500g", emoji: "🌰" },
-  { id: 8,  name: "Arándanos Secos",       cost: 3500, category: "Frutas Secas", unit: "250g", emoji: "🫐" },
-  { id: 9,  name: "Dátiles Medjool",       cost: 6800, category: "Frutas Secas", unit: "500g", emoji: "🟤" },
-  { id: 10, name: "Higos Secos Premium",   cost: 2200, category: "Frutas Secas", unit: "500g", emoji: "🍂" },
-  { id: 11, name: "Pasas de Uva Rubias",   cost: 1400, category: "Frutas Secas", unit: "500g", emoji: "🍇" },
-  { id: 12, name: "Damascos Secos",        cost: 2800, category: "Frutas Secas", unit: "500g", emoji: "🍑" },
-  { id: 13, name: "Mix Mediterráneo",      cost: 3800, category: "Mezclas",      unit: "500g", emoji: "✨" },
-  { id: 14, name: "Trail Mix Energético",  cost: 2900, category: "Mezclas",      unit: "500g", emoji: "⚡" },
-  { id: 15, name: "Semillas de Chía",      cost: 1200, category: "Semillas",     unit: "500g", emoji: "🌱" },
-  { id: 16, name: "Semillas de Lino",      cost: 800,  category: "Semillas",     unit: "500g", emoji: "🌾" },
-  { id: 17, name: "Granola Artesanal",     cost: 2400, category: "Cereales",     unit: "500g", emoji: "🥣" },
-  { id: 18, name: "Almendras Bulto",       cost: 25000,category: "Nueces",       unit: "10 kg", emoji: "📦" }
+  { id: 1,  name: "Almendras Natural",     cost: 2800, category: "Nueces",       unit: "500g", emoji: "🌰", imageUrl: "https://images.unsplash.com/photo-1508061253366-f7da158b6d46?w=600&q=80" },
+  { id: 2,  name: "Almendras Blanqueadas", cost: 3200, category: "Nueces",       unit: "500g", emoji: "🌰", imageUrl: "https://images.unsplash.com/photo-1554520735-0a3b8b6ce8ce?w=600&q=80" },
+  { id: 3,  name: "Nueces Mariposa",       cost: 4500, category: "Nueces",       unit: "500g", emoji: "🥜", imageUrl: "https://images.unsplash.com/photo-1576759711677-448203c200ab?w=600&q=80" },
+  { id: 4,  name: "Pistachos Iraníes",     cost: 5800, category: "Nueces",       unit: "250g", emoji: "🫘", imageUrl: "https://images.unsplash.com/photo-1582293405788-b2ef65daeb58?w=600&q=80" },
+  { id: 5,  name: "Anacardos Natural",     cost: 4200, category: "Nueces",       unit: "500g", emoji: "🌿", imageUrl: "https://images.unsplash.com/photo-1599577180572-132d73f1d871?w=600&q=80" },
+  { id: 6,  name: "Maní Tostado Salado",   cost: 800,  category: "Nueces",       unit: "500g", emoji: "🥜", imageUrl: "https://images.unsplash.com/photo-1563223018-b20dd6f26487?w=600&q=80" },
+  { id: 7,  name: "Pecán Entero",          cost: 6800, category: "Nueces",       unit: "500g", emoji: "🌰", imageUrl: "https://images.unsplash.com/photo-1614210452391-7685287f394c?w=600&q=80" },
+  { id: 8,  name: "Arándanos Secos",       cost: 3500, category: "Frutas Secas", unit: "250g", emoji: "🫐", imageUrl: "https://images.unsplash.com/photo-1590059530474-0f2c0fdffdd5?w=600&q=80" },
+  { id: 9,  name: "Dátiles Medjool",       cost: 6800, category: "Frutas Secas", unit: "500g", emoji: "🟤", imageUrl: "https://images.unsplash.com/photo-1605335805545-21d3f25d97bc?w=600&q=80" },
+  { id: 10, name: "Higos Secos Premium",   cost: 2200, category: "Frutas Secas", unit: "500g", emoji: "🍂", imageUrl: "https://images.unsplash.com/photo-1508213697960-91ff6d4cb432?w=600&q=80" },
+  { id: 11, name: "Pasas de Uva Rubias",   cost: 1400, category: "Frutas Secas", unit: "500g", emoji: "🍇", imageUrl: "https://images.unsplash.com/photo-1596547609652-9cb5b8ebfa4a?w=600&q=80" },
+  { id: 12, name: "Damascos Secos",        cost: 2800, category: "Frutas Secas", unit: "500g", emoji: "🍑", imageUrl: "https://images.unsplash.com/photo-1627914041793-27a9ff8ad1e8?w=600&q=80" },
+  { id: 13, name: "Mix Mediterráneo",      cost: 3800, category: "Mezclas",      unit: "500g", emoji: "✨", imageUrl: "https://images.unsplash.com/photo-1604550269382-7756acc0e6ab?w=600&q=80" },
+  { id: 14, name: "Trail Mix Energético",  cost: 2900, category: "Mezclas",      unit: "500g", emoji: "⚡", imageUrl: "https://images.unsplash.com/photo-1505252585461-04db1eb84625?w=600&q=80" },
+  { id: 15, name: "Semillas de Chía",      cost: 1200, category: "Semillas",     unit: "500g", emoji: "🌱", imageUrl: "https://images.unsplash.com/photo-1564757656644-8e12f6fe2b2c?w=600&q=80" },
+  { id: 16, name: "Semillas de Lino",      cost: 800,  category: "Semillas",     unit: "500g", emoji: "🌾", imageUrl: "https://images.unsplash.com/photo-1616834462615-5645620cb2a4?w=600&q=80" },
+  { id: 17, name: "Granola Artesanal",     cost: 2400, category: "Cereales",     unit: "500g", emoji: "🥣", imageUrl: "https://images.unsplash.com/photo-1517673132405-a56a62b18caf?w=600&q=80" },
+  { id: 18, name: "Almendras Bulto",       cost: 25000,category: "Nueces",       unit: "10 kg", emoji: "📦", imageUrl: "https://images.unsplash.com/photo-1600189021287-3e11808e063c?w=600&q=80" }
 ];
 
 const FALLBACK_PRODUCTS = rawFallbackParams.map(p => ({
