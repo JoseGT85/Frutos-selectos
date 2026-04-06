@@ -129,8 +129,8 @@ export default function App() {
   const cartCount = cart.reduce((sum, i) => sum + i.qty, 0);
 
   // ── Checkout WhatsApp ───────────────────────────────────────────────────
-  const handleWhatsApp = async () => {
-    const message = buildOrderMessage(cart, margin);
+  const handleWhatsApp = async (shippingStatus, totalKg, clientData) => {
+    const message = buildOrderMessage(cart, margin, shippingStatus, totalKg, clientData);
     openWhatsApp(message);
 
     // Enviar datos al webhook de automatización (si está configurado)
@@ -153,8 +153,10 @@ export default function App() {
 
   // ── Render ──────────────────────────────────────────────────────────────
   return (
-    <div style={{ minHeight: "100vh", background: "#070707" }}>
-      <Header
+    <>
+      <div style={{background:"#c9a84c",color:"#060606",textAlign:"center",padding:"8px",fontSize:"0.62rem",letterSpacing:"0.12em",fontWeight:600,textTransform:"uppercase"}}>📦 Envío gratis en tu primer pedido desde 10 kg (podés combinar productos)</div>
+      <div style={{ minHeight: "100vh", background: "#070707" }}>
+        <Header
         view={view}
         setView={setView}
         cartCount={cartCount}
@@ -288,5 +290,6 @@ export default function App() {
         </svg>
       </a>
     </div>
+    </>
   );
 }

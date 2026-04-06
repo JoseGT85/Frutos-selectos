@@ -8,9 +8,12 @@ import { calcSalePrice, fmt } from '../utils/pricing.js';
  * Construye el texto del pedido formateado para WhatsApp.
  * @param {Array} cart - Items del carrito [{ id, name, unit, cost, qty }]
  * @param {number} margin - Margen de rentabilidad actual
+ * @param {string} shippingStatus
+ * @param {number} totalKg
+ * @param {object} clientData
  * @returns {string} Mensaje formateado con markdown de WhatsApp
  */
-export function buildOrderMessage(cart, margin) {
+export function buildOrderMessage(cart, margin, shippingStatus = "", totalKg = 0, clientData = null) {
   const lines = cart.map((item) => {
     const p = calcSalePrice(item.cost, margin);
     return `• ${item.name} (${item.unit}) ×${item.qty}  →  ${fmt(p * item.qty)}`;
@@ -21,14 +24,23 @@ export function buildOrderMessage(cart, margin) {
     0
   );
 
+  const statusBox = clientData ? [
+    "",
+    `👤 *Cliente:* ${clientData.name} ${clientData.lastname}`,
+    `📞 *Tel:* ${clientData.phone}`,
+    `📍 *Envío:* ${clientData.address}`,
+    `📄 *CUIT/CUIL:* ${clientData.cuit}`,
+    `⚖️ *Peso Total:* ${totalKg.toFixed(2)} kg`,
+    `🚚 *Estado Envío:* ${shippingStatus}`
+  ] : ["", "Por favor confirmar disponibilidad y coordinar el envío. ¡Muchas gracias!"];
+
   return [
     `🌰 *Pedido — ${config.businessName} Premium*`,
     "━━━━━━━━━━━━━━━━━━━━━━━",
     ...lines,
     "━━━━━━━━━━━━━━━━━━━━━━━",
     `💰 *Total: ${fmt(total)}*`,
-    "",
-    "Por favor confirmar disponibilidad y coordinar el envío. ¡Muchas gracias!",
+    ...statusBox,
   ].join("\n");
 }
 

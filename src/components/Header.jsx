@@ -52,7 +52,7 @@ export default function Header({ view, setView, cartCount, onOpenCart, onUnlockA
             fontSize: "0.55rem", letterSpacing: "0.38em",
             color: "#555", textTransform: "uppercase", marginTop: 2,
           }}>
-            Calidad Premium · Buenos Aires
+            Calidad Premium · Mendoza
           </p>
         </div>
 

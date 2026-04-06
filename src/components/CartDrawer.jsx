@@ -1,34 +1,27 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X, Plus, Minus, Package, MessageCircle, ChevronRight, Trash2 } from "lucide-react";
 import { calcSalePrice, fmt } from "../utils/pricing.js";
 
 export default function CartDrawer({ cart, margin, cartTotal, cartCount, updateQty, removeFromCart, clearCart, onClose, onWhatsApp }) {
   const drawerRef = useRef(null);
   const closeRef  = useRef(null);
+  
+  const [checkoutStep, setCheckoutStep] = useState(false);
+  const [formData, setFormData] = useState({ name:"", lastname:"", email:"", phone:"", address:"", cuit:"" });
+  const [submitting, setSubmitting] = useState(false);
+  const totalKg = cart.reduce((s,i) => s + ((i.peso_kg || 1) * i.qty), 0);
 
   // ── Focus trap: atrapar el foco dentro del drawer ──────────────────────
   useEffect(() => {
-    // Guardar el elemento que tenía el foco antes de abrir
     const previousFocus = document.activeElement;
-
-    // Foco al botón cerrar al montar
     closeRef.current?.focus();
 
-    // Manejar Escape para cerrar
     const handleKeyDown = (e) => {
-      if (e.key === "Escape") {
-        onClose();
-        return;
-      }
-
-      // Focus trap
+      if (e.key === "Escape") { onClose(); return; }
       if (e.key === "Tab" && drawerRef.current) {
-        const focusable = drawerRef.current.querySelectorAll(
-          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-        );
+        const focusable = drawerRef.current.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
         const first = focusable[0];
         const last  = focusable[focusable.length - 1];
-
         if (e.shiftKey && document.activeElement === first) {
           e.preventDefault();
           last.focus();
@@ -38,217 +31,151 @@ export default function CartDrawer({ cart, margin, cartTotal, cartCount, updateQ
         }
       }
     };
-
     document.addEventListener("keydown", handleKeyDown);
-
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
-      // Restaurar foco al cerrar
       previousFocus?.focus?.();
     };
   }, [onClose]);
 
-  return (
-    <div
-      style={{ position: "fixed", inset: 0, zIndex: 100 }}
-      role="dialog"
-      aria-modal="true"
-      aria-label="Carrito de compras"
-    >
-      {/* Backdrop */}
-      <div
-        onClick={onClose}
-        style={{
-          position: "absolute", inset: 0,
-          background: "rgba(0,0,0,0.72)",
-          backdropFilter: "blur(6px)",
-        }}
-        aria-hidden="true"
-      />
+  const handleProceed = async () => {
+    if (!formData.name || !formData.lastname || !formData.phone || !formData.address) {
+      return alert("Por favor completá los datos obligatorios (Nombre, Apellido, Teléfono y Dirección)");
+    }
+    setSubmitting(true);
+    try {
+      // Ajusta la URL al puerto de Node.js, ya que Vite lo sirve en 5174 localmente
+      const res = await fetch(`http://localhost:3000/api/orders`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientData: formData, cartData: cart, totalKg })
+      });
+      if (!res.ok) throw new Error("Error del servidor al validar orden");
+      const data = await res.json();
+      onWhatsApp(data.order.shippingStatus, totalKg, formData);
+      onClose();
+    } catch (e) {
+      alert("No pudimos conectar con el servidor. Se enviará a WhatsApp directo...");
+      onWhatsApp("Sin validar (error de conexión temporal)", totalKg, formData);
+      onClose();
+    }
+  };
 
-      {/* Panel */}
-      <div
-        ref={drawerRef}
-        style={{
-          position: "absolute", right: 0, top: 0, bottom: 0,
-          width: "min(430px, 100vw)",
-          background: "#0d0d0d",
-          borderLeft: "1px solid rgba(255,255,255,0.055)",
-          display: "flex", flexDirection: "column",
-          animation: "slideIn 0.32s cubic-bezier(0.4,0,0.2,1) both",
-        }}
-      >
-        {/* Header */}
-        <div style={{
-          padding: "22px 28px",
-          borderBottom: "1px solid rgba(255,255,255,0.055)",
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-        }}>
-          <div>
-            <h2 className="serif" style={{ fontSize: "1.3rem", fontWeight: 300, color: "#e8e0d0" }}>
-              Tu Pedido
-            </h2>
-            <p style={{ fontSize: "0.58rem", letterSpacing: "0.25em", color: "#555", textTransform: "uppercase", marginTop: 3 }}>
-              {cartCount} artículo{cartCount !== 1 ? "s" : ""}
-            </p>
+  const fv = (k,v) => setFormData(p => ({...p, [k]: v}));
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 100 }} role="dialog" aria-modal="true" aria-label="Carrito de compras">
+      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.72)", backdropFilter: "blur(6px)" }} aria-hidden="true" />
+
+      <div ref={drawerRef} style={{
+        position: "absolute", right: 0, top: 0, bottom: 0,
+        width: "min(430px, 100vw)", background: "#0d0d0d",
+        borderLeft: "1px solid rgba(255,255,255,0.055)", display: "flex", flexDirection: "column",
+        animation: "slideIn 0.32s cubic-bezier(0.4,0,0.2,1) both",
+      }}>
+        <div style={{ padding: "22px 28px", borderBottom: "1px solid rgba(255,255,255,0.055)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{display:"flex", alignItems:"center", gap:8}}>
+            {checkoutStep && <button onClick={()=>setCheckoutStep(false)} style={{background:"none",border:"none",color:"#c9a84c",cursor:"pointer"}} aria-label="Volver atrás"><ChevronRight size={16} style={{transform:"rotate(180deg)"}}/></button>}
+            <div>
+              <h2 className="serif" style={{ fontSize: "1.3rem", fontWeight: 300, color: "#e8e0d0" }}>{checkoutStep?"Tus Datos":"Tu Pedido"}</h2>
+              <p style={{ fontSize: "0.58rem", letterSpacing: "0.25em", color: "#555", textTransform: "uppercase", marginTop: 3 }}>
+                {checkoutStep ? "Paso Final" : `${cartCount} artículo${cartCount !== 1 ? "s" : ""} · ${totalKg.toFixed(2)} kg`}
+              </p>
+            </div>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
-            {cart.length > 0 && (
-              <button
-                onClick={clearCart}
-                aria-label="Vaciar carrito"
-                style={{
-                  background: "none",
-                  border: "1px solid rgba(255,255,255,0.08)",
-                  padding: 8, borderRadius: 2,
-                  cursor: "pointer", color: "#555",
-                  transition: "color 0.2s, border-color 0.2s",
-                  display: "flex", alignItems: "center", gap: 5,
-                  fontSize: "0.54rem", fontFamily: "Jost, sans-serif",
-                  letterSpacing: "0.1em", textTransform: "uppercase",
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = "#c97a7a"; e.currentTarget.style.borderColor = "rgba(200,80,80,0.3)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = "#555"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"; }}
-              >
-                <Trash2 size={12} aria-hidden="true" />
-                Vaciar
+            {!checkoutStep && cart.length > 0 && (
+              <button onClick={clearCart} aria-label="Vaciar carrito" style={{
+                background: "none", border: "1px solid rgba(255,255,255,0.08)", padding: 8, borderRadius: 2, cursor: "pointer", color: "#555",
+                transition: "color 0.2s, border-color 0.2s", display: "flex", alignItems: "center", gap: 5, fontSize: "0.54rem", letterSpacing: "0.1em", textTransform: "uppercase",
+              }} onMouseEnter={(e) => { e.currentTarget.style.color = "#c97a7a"; e.currentTarget.style.borderColor = "rgba(200,80,80,0.3)"; }} onMouseLeave={(e) => { e.currentTarget.style.color = "#555"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"; }}>
+                <Trash2 size={12} aria-hidden="true" /> Vaciar
               </button>
             )}
-            <button
-              ref={closeRef}
-              onClick={onClose}
-              aria-label="Cerrar carrito"
-              style={{
-                background: "none",
-                border: "1px solid rgba(255,255,255,0.08)",
-                padding: 8, borderRadius: 2,
-                cursor: "pointer", color: "#666",
-                transition: "color 0.2s",
-              }}
-            >
-              <X size={14} aria-hidden="true" />
-            </button>
+            <button ref={closeRef} onClick={onClose} aria-label="Cerrar carrito" style={{ background: "none", border: "1px solid rgba(255,255,255,0.08)", padding: 8, borderRadius: 2, cursor: "pointer", color: "#666", transition: "color 0.2s" }}><X size={14} aria-hidden="true" /></button>
           </div>
         </div>
 
-        {/* Items */}
         <div style={{ flex: 1, overflowY: "auto", padding: "12px 28px" }} role="list" aria-label="Productos en el carrito">
-          {cart.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "64px 0", color: "#333" }}>
-              <Package size={34} style={{ margin: "0 auto 14px", display: "block" }} aria-hidden="true" />
-              <p style={{ fontSize: "0.78rem", letterSpacing: "0.12em" }}>
-                Tu carrito está vacío
-              </p>
-            </div>
+          {!checkoutStep ? (
+            cart.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "64px 0", color: "#333" }}>
+                <Package size={34} style={{ margin: "0 auto 14px", display: "block" }} aria-hidden="true" />
+                <p style={{ fontSize: "0.78rem", letterSpacing: "0.12em" }}>Tu carrito está vacío</p>
+              </div>
+            ) : (
+              cart.map((item) => {
+                const price = calcSalePrice(item.cost, margin);
+                return (
+                  <div key={item.id} role="listitem" style={{ padding: "16px 0", borderBottom: "1px solid rgba(255,255,255,0.04)", display: "flex", alignItems: "center", gap: 14 }}>
+                    <span style={{ fontSize: "1.7rem", flexShrink: 0 }} aria-hidden="true">{item.emoji}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p className="serif" style={{ fontSize: "0.95rem", color: "#ddd", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.name}</p>
+                      <p style={{ fontSize: "0.62rem", color: "#c9a84c", marginTop: 2, display:"flex", alignItems:"center", gap:6 }}>
+                        {fmt(price)} × unidad <span style={{color:"#555"}}>· {(item.peso_kg||1)}kg</span>
+                      </p>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }} role="group" aria-label={`Cantidad de ${item.name}`}>
+                      <button className="qty-btn" onClick={() => updateQty(item.id, -1)} aria-label={`Reducir cantidad de ${item.name}`}><Minus size={11} aria-hidden="true" /></button>
+                      <span style={{ fontSize: "0.88rem", color: "#e8e0d0", minWidth: 20, textAlign: "center" }} aria-live="polite">{item.qty}</span>
+                      <button className="qty-btn" onClick={() => updateQty(item.id, 1)} aria-label={`Aumentar cantidad de ${item.name}`}><Plus size={11} aria-hidden="true" /></button>
+                    </div>
+                    <div style={{ textAlign: "right", flexShrink: 0 }}>
+                      <p style={{ fontSize: "0.9rem", color: "#e8e0d0" }}>{fmt(price * item.qty)}</p>
+                      <button onClick={() => removeFromCart(item.id)} aria-label={`Quitar ${item.name} del carrito`} style={{ background: "none", border: "none", cursor: "pointer", color: "#3a3530", fontSize: "0.58rem", letterSpacing: "0.1em", marginTop: 4, transition: "color 0.2s", fontFamily: "Jost, sans-serif" }} onMouseEnter={(e) => e.currentTarget.style.color = "#c97a7a"} onMouseLeave={(e) => e.currentTarget.style.color = "#3a3530"}>quitar</button>
+                    </div>
+                  </div>
+                );
+              })
+            )
           ) : (
-            cart.map((item) => {
-              const price = calcSalePrice(item.cost, margin);
-              return (
-                <div key={item.id} role="listitem" style={{
-                  padding: "16px 0",
-                  borderBottom: "1px solid rgba(255,255,255,0.04)",
-                  display: "flex", alignItems: "center", gap: 14,
-                }}>
-                  <span style={{ fontSize: "1.7rem", flexShrink: 0 }} aria-hidden="true">{item.emoji}</span>
-
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p className="serif" style={{ fontSize: "0.95rem", color: "#ddd", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                      {item.name}
-                    </p>
-                    <p style={{ fontSize: "0.62rem", color: "#c9a84c", marginTop: 2 }}>
-                      {fmt(price)} × unidad
-                    </p>
-                  </div>
-
-                  {/* Qty controls */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }} role="group" aria-label={`Cantidad de ${item.name}`}>
-                    <button
-                      className="qty-btn"
-                      onClick={() => updateQty(item.id, -1)}
-                      aria-label={`Reducir cantidad de ${item.name}`}
-                    >
-                      <Minus size={11} aria-hidden="true" />
-                    </button>
-                    <span style={{ fontSize: "0.88rem", color: "#e8e0d0", minWidth: 20, textAlign: "center" }} aria-live="polite">
-                      {item.qty}
-                    </span>
-                    <button
-                      className="qty-btn"
-                      onClick={() => updateQty(item.id, 1)}
-                      aria-label={`Aumentar cantidad de ${item.name}`}
-                    >
-                      <Plus size={11} aria-hidden="true" />
-                    </button>
-                  </div>
-
-                  {/* Subtotal + remove */}
-                  <div style={{ textAlign: "right", flexShrink: 0 }}>
-                    <p style={{ fontSize: "0.9rem", color: "#e8e0d0" }}>
-                      {fmt(price * item.qty)}
-                    </p>
-                    <button
-                      onClick={() => removeFromCart(item.id)}
-                      aria-label={`Quitar ${item.name} del carrito`}
-                      style={{
-                        background: "none", border: "none",
-                        cursor: "pointer", color: "#3a3530",
-                        fontSize: "0.58rem", letterSpacing: "0.1em",
-                        marginTop: 4, transition: "color 0.2s",
-                        fontFamily: "Jost, sans-serif",
-                      }}
-                      onMouseEnter={(e) => e.currentTarget.style.color = "#c97a7a"}
-                      onMouseLeave={(e) => e.currentTarget.style.color = "#3a3530"}
-                    >
-                      quitar
-                    </button>
-                  </div>
-                </div>
-              );
-            })
+            <div style={{padding:"12px 0",display:"flex",flexDirection:"column",gap:14}} className="anim-in">
+              <p style={{fontSize:"0.62rem",color:"#888",marginBottom:8}}>Completá tus datos para agilizar el envío y validar si aplicás a beneficios de compra.</p>
+              <div style={{display:"flex",gap:10}}>
+                <div style={{flex:1}}><p style={{fontSize:"0.56rem",color:"#555",marginBottom:4}}>Nombre *</p><input style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:3,color:"#e8e0d0",padding:"10px 14px",width:"100%",outline:"none"}} autoFocus value={formData.name} onChange={e=>fv("name",e.target.value)} /></div>
+                <div style={{flex:1}}><p style={{fontSize:"0.56rem",color:"#555",marginBottom:4}}>Apellido *</p><input style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:3,color:"#e8e0d0",padding:"10px 14px",width:"100%",outline:"none"}} value={formData.lastname} onChange={e=>fv("lastname",e.target.value)} /></div>
+              </div>
+              <div style={{display:"flex",gap:10}}>
+                <div style={{flex:1}}><p style={{fontSize:"0.56rem",color:"#555",marginBottom:4}}>Teléfono (WA) *</p><input style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:3,color:"#e8e0d0",padding:"10px 14px",width:"100%",outline:"none"}} type="tel" value={formData.phone} onChange={e=>fv("phone",e.target.value)} /></div>
+                <div style={{flex:1}}><p style={{fontSize:"0.56rem",color:"#555",marginBottom:4}}>CUIT / CUIL</p><input style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:3,color:"#e8e0d0",padding:"10px 14px",width:"100%",outline:"none"}} value={formData.cuit} onChange={e=>fv("cuit",e.target.value)} /></div>
+              </div>
+              <div><p style={{fontSize:"0.56rem",color:"#555",marginBottom:4}}>Dirección de Envío *</p><input style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:3,color:"#e8e0d0",padding:"10px 14px",width:"100%",outline:"none"}} value={formData.address} onChange={e=>fv("address",e.target.value)} /></div>
+              <div><p style={{fontSize:"0.56rem",color:"#555",marginBottom:4}}>Email (Opcional)</p><input style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:3,color:"#e8e0d0",padding:"10px 14px",width:"100%",outline:"none"}} type="email" value={formData.email} onChange={e=>fv("email",e.target.value)} /></div>
+            </div>
           )}
         </div>
 
-        {/* Footer / Checkout */}
-        <div style={{
-          padding: "22px 28px",
-          borderTop: "1px solid rgba(255,255,255,0.055)",
-        }}>
+        <div style={{ padding: "22px 28px", borderTop: "1px solid rgba(255,255,255,0.055)", background:(totalKg>=10 && !checkoutStep)?"rgba(100,200,100,0.03)":"transparent" }}>
+          {!checkoutStep && (
+            <div style={{marginBottom:16}}>
+              {totalKg >= 10 ? (
+                <p style={{fontSize:"0.6rem",color:"#6acc6a",display:"flex",alignItems:"center",gap:6}}><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg> Este pedido califica para <b>Validación de Envío Gratis</b>.</p>
+              ) : (
+                <p style={{fontSize:"0.6rem",color:"#888",display:"flex",alignItems:"center",gap:6}}><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg> Te faltan {(10 - totalKg).toFixed(2)} kg para acceder a envío gratis en tu primer pedido.</p>
+              )}
+            </div>
+          )}
+
           <div style={{ marginBottom: 20 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
-              <span style={{ fontSize: "0.62rem", letterSpacing: "0.28em", color: "#555", textTransform: "uppercase" }}>
-                Total estimado
-              </span>
-              <span className="serif" style={{ fontSize: "2rem", fontWeight: 300, color: "#c9a84c" }} aria-live="polite">
-                {fmt(cartTotal)}
-              </span>
+              <span style={{ fontSize: "0.62rem", letterSpacing: "0.28em", color: "#555", textTransform: "uppercase" }}>Total estimado</span>
+              <span className="serif" style={{ fontSize: "2rem", fontWeight: 300, color: "#c9a84c" }} aria-live="polite">{fmt(cartTotal)}</span>
             </div>
             <div style={{ height: 1, background: "linear-gradient(90deg, transparent, rgba(201,168,76,0.2), transparent)" }} />
           </div>
 
-          <button
-            id="whatsapp-checkout"
-            onClick={onWhatsApp}
-            disabled={cart.length === 0}
-            className="btn-gold"
-            aria-label={`Finalizar pedido por WhatsApp. Total: ${fmt(cartTotal)}`}
-            style={{
-              width: "100%", padding: "14px",
-              borderRadius: 2, display: "flex",
-              alignItems: "center", justifyContent: "center",
-              gap: 10, fontSize: "0.7rem", letterSpacing: "0.15em",
-            }}
-          >
-            <MessageCircle size={15} aria-hidden="true" />
-            Finalizar por WhatsApp
-            <ChevronRight size={14} aria-hidden="true" />
-          </button>
+          {!checkoutStep ? (
+            <button onClick={()=>setCheckoutStep(true)} disabled={cart.length === 0} className="btn-gold" aria-label={`Continuar checkout`} style={{ width: "100%", padding: "14px", borderRadius: 2, display: "flex", alignItems: "center", justifyContent: "center", gap: 10, fontSize: "0.7rem", letterSpacing: "0.15em" }}>
+              Continuar <ChevronRight size={14} aria-hidden="true" />
+            </button>
+          ) : (
+            <button onClick={handleProceed} disabled={submitting} className="btn-gold" aria-label={`Finalizar pedido por WhatsApp`} style={{ width: "100%", padding: "14px", borderRadius: 2, display: "flex", alignItems: "center", justifyContent: "center", gap: 10, fontSize: "0.7rem", letterSpacing: "0.15em", background:submitting?"#555":"linear-gradient(135deg,#c9a84c,#dbbe6a)" }}>
+              <MessageCircle size={15} aria-hidden="true" /> {submitting ? "Validando..." : "Finalizar por WhatsApp"}
+            </button>
+          )}
 
-          <p style={{
-            textAlign: "center", marginTop: 12,
-            fontSize: "0.56rem", color: "#3a3530",
-            letterSpacing: "0.15em", textTransform: "uppercase",
-          }}>
-            Se abrirá WhatsApp con tu pedido completo
+          <p style={{ textAlign: "center", marginTop: 12, fontSize: "0.56rem", color: "#3a3530", letterSpacing: "0.15em", textTransform: "uppercase" }}>
+            {checkoutStep ? "Tus datos se guardarán de forma segura" : "Checkout seguro"}
           </p>
         </div>
       </div>
