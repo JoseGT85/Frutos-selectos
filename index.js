@@ -45,10 +45,8 @@ REQUIRED.forEach(k => {
   }
 });
 
-const BOT_TOKEN  = process.env.TELEGRAM_BOT_TOKEN;
-const ADMIN_IDS  = process.env.ADMIN_CHAT_IDS.split(",").map(Number).filter(Boolean);
 const PORT       = Number(process.env.PORT || 3000);
-const CORS_ORIGIN = process.env.CORS_ORIGIN || "*"; // En prod: URL exacta del front
+const CORS_ORIGIN = process.env.CORS_ORIGIN || "*";
 
 // ─── Instancias ─────────────────────────────────────────────────────────────
 const bot          = new Telegraf(BOT_TOKEN);
@@ -57,6 +55,9 @@ const orchestrator = new AIOrchestrator();
 const catalog      = new ProductCatalog(settings.getMargin());
 const security     = new SecurityMiddleware();
 const waService    = new WhatsAppService();
+
+// Exportamos para el entry de Vercel (ahora que están inicializados)
+export { app, bot };
 
 // Si el admin cambia el margen via API, el catálogo lo refleja en tiempo real
 settings.on("marginChanged", m => catalog.setMargin(m));
@@ -517,35 +518,36 @@ app.use((err, req, res, next) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// ARRANQUE — Polling (dev) o Webhook (producción)
+// ARRANQUE — Solo si no estamos en Vercel
 // ═══════════════════════════════════════════════════════════════════════════
-const server = app.listen(PORT, () => {
-  console.log(`\n🚀 DIFRUMARKET Backend corriendo en puerto ${PORT}`);
-  console.log(`   📡 API KB:     http://localhost:${PORT}/api/kb`);
-  console.log(`   ⚙️  API Admin:  http://localhost:${PORT}/api/admin/status`);
-  console.log(`   💚 WhatsApp:   http://localhost:${PORT}/webhook/whatsapp`);
-  console.log(`   💓 Health:     http://localhost:${PORT}/health`);
-  console.log(`   🧠 KB activas: ${kbService.getStats().active} entradas`);
-  console.log(`   📊 Margen:     ${settings.getMargin()}% (persistido en disco)`);
-  console.log(`   📱 WhatsApp:   ${waService.isConfigured() ? "✅ Cloud API configurado" : "⚠️ No configurado (faltan WA_PHONE_NUMBER_ID y WA_ACCESS_TOKEN)"}\n`);
-});
+const isVercel = process.env.VERCEL === '1' || !!process.env.NOW_REGION;
 
-if (process.env.NODE_ENV === "production" && process.env.WEBHOOK_URL) {
-  // Modo producción — Telegram hace POST a nuestro servidor
+if (!isVercel) {
+  const server = app.listen(PORT, () => {
+    console.log(`\n🚀 DIFRUMARKET Backend corriendo en puerto ${PORT}`);
+    console.log(`   📡 API KB:     http://localhost:${PORT}/api/kb`);
+    console.log(`   ⚙️  API Admin:  http://localhost:${PORT}/api/admin/status`);
+    console.log(`   💚 WhatsApp:   http://localhost:${PORT}/webhook/whatsapp`);
+    console.log(`   💓 Health:     http://localhost:${PORT}/health`);
+    console.log(`   🧠 KB activas: ${kbService.getStats().active} entradas`);
+    console.log(`   📊 Margen:     ${settings.getMargin()}% (persistido en disco)`);
+    console.log(`   📱 WhatsApp:   ${waService.isConfigured() ? "✅ Cloud API configurado" : "⚠️ No configurado (faltan WA_PHONE_NUMBER_ID y WA_ACCESS_TOKEN)"}\n`);
+  });
+
+  if (process.env.NODE_ENV === "production" && process.env.WEBHOOK_URL) {
+    const secret = process.env.WEBHOOK_SECRET || "difrumarket_secret";
+    app.use(bot.webhookCallback(`/telegram/${secret}`));
+    bot.telegram.setWebhook(`${process.env.WEBHOOK_URL}/telegram/${secret}`).catch(e => console.error(e));
+  } else {
+    bot.launch({ dropPendingUpdates: true }).catch(err => console.error("❌ Error lanzando bot:", err.message));
+  }
+} else {
+  // En Vercel configuramos el webhook callback como middleware (pero no hacemos setWebhook automático acá, mejor manual o en deploy)
   const secret = process.env.WEBHOOK_SECRET || "difrumarket_secret";
   app.use(bot.webhookCallback(`/telegram/${secret}`));
-
-  bot.telegram.setWebhook(`${process.env.WEBHOOK_URL}/telegram/${secret}`)
-    .then(() => console.log("✅ Webhook de Telegram configurado"))
-    .catch(err => console.error("❌ Error configurando webhook:", err.message));
-} else {
-  // Modo desarrollo — el bot "pregunta" a Telegram cada segundo
-  bot.launch({ dropPendingUpdates: true })
-    .then(() => console.log("🤖 Bot Telegram en modo polling (desarrollo)"))
-    .catch(err => console.error("❌ Error lanzando bot:", err.message));
 }
 
-// ─── Graceful shutdown ───────────────────────────────────────────────────────
+// ─── Graceful shutdown (solo fuera de Vercel) ───────────────────────────────
 const shutdown = signal => {
   console.log(`\n⚠️ ${signal} recibido — cerrando…`);
   bot.stop(signal);
