@@ -79,7 +79,14 @@ export default function ProductCard({ product, margin, inCart, onAdd, delay }) {
         <p style={{ fontSize: "0.62rem", color: "#4a4540", letterSpacing: "0.18em", marginBottom: 18 }}>
           {product.unit}
         </p>
-        <p style={{fontSize:"0.52rem",color:product.tipo_producto==="bulto_10kg"?"#6acc6a":"#888",marginBottom:16,display:"flex",alignItems:"center",gap:4}}><Truck size={10}/> {product.tipo_producto==="bulto_10kg"?"Envío gratis en primer pedido":"Envío a cargo del comprador"}</p>
+        <p style={{
+          fontSize: "0.52rem", 
+          color: (product.tipo_producto === "bulto_10kg" || (product.peso_kg * inCart) >= 10) ? "#6acc6a" : "#888", 
+          marginBottom: 16, display: "flex", alignItems: "center", gap: 4
+        }}>
+          <Truck size={10}/> 
+          {(product.tipo_producto === "bulto_10kg" || (product.peso_kg * inCart) >= 10) ? "Envío gratis en primer pedido" : "Envío a cargo del comprador"}
+        </p>
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <span className="serif" style={{ fontSize: "1.5rem", fontWeight: 300, color: "#c9a84c" }}>
