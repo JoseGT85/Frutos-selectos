@@ -49,7 +49,7 @@ const DEFAULT_KB = [
   { id:"kb4", cat:"payment",  active:true,  priority:1, triggers:"pago,pagar,transferencia,mercadopago,tarjeta,cuotas", question:"¿Cómo puedo pagar?", answer:"Aceptamos transferencia bancaria, MercadoPago (débito, crédito y cuotas) y efectivo en retiros. Para tarjeta en cuotas el costo financiero corre por cuenta del cliente." },
   { id:"kb5", cat:"products", active:true,  priority:1, triggers:"vencimiento,vence,expira,duran,fecha", question:"¿Cuánto duran los productos?", answer:"Entre 6 y 12 meses dependiendo del producto. Se conservan mejor en lugar fresco y seco, idealmente en recipiente hermético." },
   { id:"kb6", cat:"faq",      active:true,  priority:2, triggers:"mayorista,por mayor,descuento,volumen", question:"¿Venden por mayor?", answer:"Sí! Precios mayoristas a partir de 3kg por producto. Consultanos por WhatsApp mencionando la cantidad que necesitás." },
-  { id:"kb7", cat:"hours",    active:true,  priority:1, triggers:"local,retiro,dirección,donde,dónde,ubicados", question:"¿Dónde están y cómo retiro?", answer:"Estamos en Buenos Aires. Para coordinar retiro en local, consultanos la dirección exacta por WhatsApp." },
+  { id:"kb7", cat:"hours",    active:true,  priority:1, triggers:"local,retiro,dirección,donde,dónde,ubicados", question:"¿Dónde están y cómo retiro?", answer:"Estamos en Mendoza. Para coordinar retiro en local, consultanos la dirección exacta por WhatsApp." },
   { id:"kb8", cat:"faq",      active:true,  priority:3, triggers:"alérgeno,alergia,gluten,celiaco,celíaco", question:"¿Tienen productos para celíacos?", answer:"Muchos de nuestros productos son naturalmente libres de gluten, pero se procesan en instalaciones que también trabajan con cereales. Para alergias graves, consultanos el producto específico." },
   { id:"kb9", cat:"ai_rules", active:true,  priority:0, triggers:"", question:"Tono y estilo", answer:"Respondé siempre en español argentino (vos, che). Sé amable pero conciso (máx 3-4 líneas). Usá emojis con moderación. Para pedidos, siempre derivá a finalizar por WhatsApp. No inventes precios ni disponibilidades. Si no sabés algo, decilo honestamente." },
 ];
@@ -57,7 +57,7 @@ const DEFAULT_KB = [
 // ═══════════════════════════════════════════════════════════════
 // FALLBACK PRODUCTS
 // ═══════════════════════════════════════════════════════════════
-const FALLBACK = [
+const rawFallbackParams = [
   { id:1,  name:"Almendras Natural",    cost:2800, category:"Nueces",       unit:"500g", emoji:"🌰" },
   { id:2,  name:"Almendras Blanqueadas",cost:3200, category:"Nueces",       unit:"500g", emoji:"🌰" },
   { id:3,  name:"Nueces Mariposa",      cost:4500, category:"Nueces",       unit:"500g", emoji:"🥜" },
@@ -80,6 +80,32 @@ const FALLBACK = [
   { id:20, name:"Granola Artesanal",    cost:2400, category:"Cereales",     unit:"500g", emoji:"🥣" },
 ];
 
+function inferWeightAndType(unit, name) {
+  let peso_kg = 1;
+  let tipo_producto = "fraccionado";
+  const u = (unit || "").toLowerCase();
+  const n = (name || "").toLowerCase();
+  let matchKg = u.match(/(\d+(?:[\.,]\d+)?)\s*kg/);
+  if (matchKg) {
+    peso_kg = parseFloat(matchKg[1].replace(',', '.'));
+  } else {
+    let matchG = u.match(/(\d+)\s*g/);
+    if (matchG) {
+      peso_kg = parseInt(matchG[1], 10) / 1000;
+    }
+  }
+  if (u.includes("bulto") || n.includes("bulto") || peso_kg >= 10) {
+    if (!matchKg && !matchG) peso_kg = 10;
+    tipo_producto = "bulto_10kg";
+  }
+  return { peso_kg, tipo_producto };
+}
+
+const FALLBACK = rawFallbackParams.map(p => ({
+  ...p,
+  ...inferWeightAndType(p.unit, p.name)
+}));
+
 // ═══════════════════════════════════════════════════════════════
 // SHEETS PARSER
 // ═══════════════════════════════════════════════════════════════
@@ -98,7 +124,7 @@ async function fetchSheet() {
     if (!res.ok) throw new Error("Error HTTP");
     const csvText = await res.text();
     
-    // Helper para parsear CSV respetando comillas (inline para el frontend)
+    // Helper para parsear CSV respetando comillas
     const parseCSV = (text) => {
       const rows = [];
       let currentRow = [];
@@ -127,42 +153,89 @@ async function fetchSheet() {
     };
 
     const rows = parseCSV(csvText);
-    let hi = -1, rc = -1, nc = 0, uc = -1;
+
+    // Detectar estructura: buscar fila con "REMITO" y la sub-fila con "BULTO"
+    let nc = 0, presCol = 1, bultoCol = -1, kgCol = -1;
+    let foundHeader = false;
 
     for (let i = 0; i < rows.length; i++) {
-      const cells = rows[i].map(c => c.toLowerCase());
-      const ri = cells.findIndex(c => c.includes("remito"));
-      if (ri > -1) {
-        hi = i; rc = ri;
-        uc = cells.findIndex(c => /kg|g\b|unidad|presentac/.test(c));
+      const cells = rows[i].map(c => c.toLowerCase().trim());
+      const remitoIdx = cells.findIndex(c => c.includes("remito"));
+      if (remitoIdx > -1) {
         nc = cells.findIndex(c => /producto|artículo|descripción|nombre/.test(c));
         if (nc === -1) nc = 0;
+        presCol = cells.findIndex(c => /presentac/.test(c));
+        if (presCol === -1) presCol = 1;
+
+        // Sub-fila con KG y BULTO
+        if (i + 1 < rows.length) {
+          const sub = rows[i + 1].map(c => c.toLowerCase().trim());
+          for (let j = remitoIdx; j < Math.min(remitoIdx + 3, sub.length); j++) {
+            if (sub[j].includes("bulto")) bultoCol = j;
+            if (sub[j] === "kg") kgCol = j;
+          }
+        }
+        if (bultoCol === -1) bultoCol = remitoIdx + 1;
+        if (kgCol === -1) kgCol = remitoIdx;
+        foundHeader = true;
         break;
       }
     }
 
-    if (hi === -1 || rc === -1) return { products: FALLBACK, source: "fallback" };
+    if (!foundHeader) return { products: FALLBACK, source: "fallback" };
 
     const products = [];
-    for (let i = hi + 1; i < rows.length; i++) {
+    let pid = 0;
+    for (let i = 0; i < rows.length; i++) {
       const cells = rows[i];
-      if (cells.length <= rc) continue;
+      if (!cells || cells.length < 2) continue;
+      const cell0 = (cells[0] || "").trim();
+      // Saltar headers/sub-headers
+      if (cell0.toLowerCase().includes("producto") && (cells[1]||"").toLowerCase().includes("presentac")) continue;
+      if (!cell0) {
+        const c3 = (cells[3]||"").toLowerCase().trim();
+        if (c3 === "kg" || c3.includes("unidad")) continue;
+      }
+      // Detectar secciones (sin precio BULTO)
+      const bultoRaw = (cells[bultoCol] || "").trim();
+      if (cell0 && !bultoRaw && cell0.length > 3) continue;
+
       const name = cells[nc]?.trim();
       if (!name || name.length < 2) continue;
-      const raw = cells[rc]?.trim()
-        .replace(/[^0-9,.]/g, "")
-        .replace(/\./g, "")
-        .replace(",", ".");
+      if (/^(mix .+\(|recetas sujetas)/i.test(name) && !bultoRaw) continue;
+
+      const raw = bultoRaw.replace(/[^0-9,.]/g, "").replace(/\./g, "").replace(",", ".");
       const cost = parseFloat(raw);
       if (isNaN(cost) || cost <= 0) continue;
-      const unit = uc > -1 ? cells[uc]?.trim() || "1kg" : "1kg";
+
+      const unit = cells[presCol]?.trim() || "Bulto";
       const { category, emoji } = inferCat(name);
-      products.push({ id: i, name, cost, category, unit, emoji });
+      const { peso_kg, tipo_producto } = inferWeightAndType(unit, name);
+      pid++;
+      products.push({ id: pid, name, cost, category, unit, emoji, peso_kg, tipo_producto });
     }
-    return products.length > 5 ? { products, source: "sheets" } : { products: FALLBACK, source: "fallback" };
+    return products.length > 3 ? { products, source: "sheets" } : { products: FALLBACK, source: "fallback" };
   } catch (err) {
     console.error("Error fetching CSV:", err);
     return { products: FALLBACK, source: "fallback" };
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// BACKEND CATALOG FETCH — Fuente primaria (incluye name overrides, imágenes, etc)
+// ═══════════════════════════════════════════════════════════════
+async function fetchCatalog() {
+  try {
+    const res = await fetch(`${CONFIG.BACKEND_URL}/api/catalog`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const products = await res.json();
+    if (!Array.isArray(products) || products.length < 3) {
+      throw new Error("Catálogo vacío o inválido");
+    }
+    return { products, source: "backend", fromBackend: true };
+  } catch (err) {
+    console.warn("[Catalog] Backend no disponible, usando Sheets directo:", err.message);
+    return null; // null = usar fallback a fetchSheet()
   }
 }
 
@@ -246,7 +319,7 @@ function buildPrompt(products,kb){
   const rules=active.filter(e=>e.cat==="ai_rules").map(e=>e.answer).join("\n");
   const entries=active.filter(e=>e.cat!=="ai_rules")
     .map(e=>{const t=e.triggers?` [clave: ${e.triggers}]`:"";return `P: ${e.question}${t}\nR: ${e.answer}`;}).join("\n\n");
-  return `Sos el asistente virtual de ${CONFIG.BUSINESS_NAME}, frutos secos premium en Buenos Aires, Argentina.
+  return `Sos el asistente virtual de ${CONFIG.BUSINESS_NAME}, frutos secos premium en Mendoza, Argentina.
 ${rules||"Respondé en español argentino. Sé amable y conciso. Para pedidos derivar a WhatsApp."}
 
 ━━ BASE DE CONOCIMIENTO (${active.filter(e=>e.cat!=="ai_rules").length} entradas activas) ━━
@@ -345,6 +418,7 @@ export default function App() {
   const [syncOk,setSyncOk]=useState(null);
   const [search,setSearch]=useState("");
   const [cat,setCat]=useState("Todos");
+  const [tipoFiltro,setTipoFiltro]=useState("Todos");
   const [kb,setKb]=useState([]);
   const [kbReady,setKbReady]=useState(false);
 
@@ -442,9 +516,15 @@ export default function App() {
         }
       }
 
-      const { products: p, source } = await fetchSheet();
-      setProducts(p);
-      setSrc(source);
+      // Intentar primero desde el backend (tiene name overrides, imágenes, etc)
+      let result = await fetchCatalog();
+      if (!result) {
+        // Fallback: fetch directo a Google Sheets (sin enrichment)
+        result = await fetchSheet();
+      }
+      
+      setProducts(result.products);
+      setSrc(result.source);
       setSyncOk(true);
     } catch (err) {
       console.error("[Sync] Error:", err.message);
@@ -472,21 +552,37 @@ export default function App() {
   const updateQty=useCallback((id,d)=>setCart(prev=>prev.map(i=>i.id===id?{...i,qty:Math.max(0,i.qty+d)}:i).filter(i=>i.qty>0)),[]);
   const removeItem=useCallback(id=>setCart(p=>p.filter(i=>i.id!==id)),[]);
   const cartCount=cart.reduce((s,i)=>s+i.qty,0);
-  const cartTotal=cart.reduce((s,i)=>s+sale(i.cost,margin)*i.qty,0);
+  const cartTotal=cart.reduce((s,i)=>s+(i.salePrice||sale(i.cost,margin))*i.qty,0);
 
-  const openWA=()=>{
-    const lines=cart.map(i=>`• ${i.name} (${i.unit}) ×${i.qty}  →  ${fmt(sale(i.cost,margin)*i.qty)}`);
-    const msg=[`🌰 *Pedido — ${CONFIG.BUSINESS_NAME}*`,"━━━━━━━━━━━━━━━━━━━━━━━",...lines,"━━━━━━━━━━━━━━━━━━━━━━━",`💰 *Total: ${fmt(cartTotal)}*`,"","Confirmar disponibilidad y coordinar entrega. ¡Gracias! 🙌"].join("\n");
+  const openWA=(shippingStatus = "", totalKg = 0, clientData = null)=>{
+    const lines=cart.map(i=>`• ${i.name} (${i.unit}) ×${i.qty}  →  ${fmt((i.salePrice||sale(i.cost,margin))*i.qty)}`);
+    const statusBox = clientData ? [
+      "",
+      `👤 *Cliente:* ${clientData.name} ${clientData.lastname}`,
+      `📞 *Tel:* ${clientData.phone}`,
+      `📍 *Envío:* ${clientData.address}`,
+      `📄 *CUIT/CUIL:* ${clientData.cuit}`,
+      `⚖️ *Peso Total:* ${totalKg.toFixed(2)} kg`,
+      `🚚 *Estado Envío:* ${shippingStatus}`
+    ] : ["","Confirmar disponibilidad y coordinar entrega. ¡Gracias! 🙌"];
+    
+    const msg=[`🌰 *Pedido — ${CONFIG.BUSINESS_NAME}*`,"━━━━━━━━━━━━━━━━━━━━━━━",...lines,"━━━━━━━━━━━━━━━━━━━━━━━",`💰 *Total: ${fmt(cartTotal)}*`, ...statusBox].join("\n");
     window.open(`https://wa.me/${CONFIG.WHATSAPP}?text=${encodeURIComponent(msg)}`,"_blank");
   };
 
   const cats=["Todos",...Array.from(new Set(products.map(p=>p.category)))];
-  const shown=products.filter(p=>(cat==="Todos"||p.category===cat)&&(!search||p.name.toLowerCase().includes(search.toLowerCase())));
+  const shown=products.filter(p=>{
+    const matchCat = (cat==="Todos"||p.category===cat);
+    const matchTipo = (tipoFiltro==="Todos" || (tipoFiltro==="Bultos (10 kg)" && p.tipo_producto==="bulto_10kg") || (tipoFiltro==="Fraccionados" && p.tipo_producto==="fraccionado"));
+    const matchSearch = (!search||p.name.toLowerCase().includes(search.toLowerCase()));
+    return matchCat && matchTipo && matchSearch;
+  });
   const cMap=cart.reduce((a,i)=>({...a,[i.id]:i.qty}),{});
 
   return (
     <>
       <style>{S}</style>
+      <div style={{background:"#c9a84c",color:"#060606",textAlign:"center",padding:"8px",fontSize:"0.62rem",letterSpacing:"0.12em",fontWeight:600,textTransform:"uppercase"}}>📦 Envío gratis en tu primer pedido desde 10 kg (podés combinar productos)</div>
       <div style={{minHeight:"100vh",background:"#060606"}}>
         <Nav view={view} setView={setView} cartCount={cartCount}
           onCart={()=>setCartOpen(true)} syncing={syncing} src={src}
@@ -494,12 +590,12 @@ export default function App() {
           onLogout={handleLogout}/>
 
         {view==="catalog"
-          ?<Catalog products={shown} all={products} cats={cats} cat={cat} setCat={setCat} search={search} setSearch={setSearch} margin={margin} loading={loading} addToCart={addToCart} cMap={cMap}/>
+          ?<Catalog products={shown} all={products} cats={cats} cat={cat} setCat={setCat} tipoFiltro={tipoFiltro} setTipoFiltro={setTipoFiltro} search={search} setSearch={setSearch} margin={margin} loading={loading} addToCart={addToCart} cMap={cMap}/>
           : adminAuth
             ?<Admin products={products} margin={margin} setMargin={handleMarginChange}
                 syncing={syncing} syncOk={syncOk} src={src} onSync={doSync}
                 kb={kb} onKb={updateKb} kbReady={kbReady} tab={tab} setTab={setTab}
-                kbSync={kbSync} marginSync={marginSync}/>
+                kbSync={kbSync} marginSync={marginSync} adminToken={adminToken}/>
             :null
         }
       </div>
@@ -526,15 +622,15 @@ function Nav({view,setView,cartCount,onCart,syncing,src,adminAuth,onLogoClick,on
               FRUTOS <span style={{color:"#c9a84c",fontStyle:"italic"}}>Selectos</span>
             </h1>
             <p style={{fontSize:"0.5rem",letterSpacing:"0.36em",color:"#444",textTransform:"uppercase",marginTop:2}}>
-              DIFRUMARKET · Buenos Aires
+              DIFRUMARKET · Mendoza
             </p>
           </div>
           {src&&(
             <span style={{fontSize:"0.46rem",letterSpacing:"0.16em",padding:"3px 8px",borderRadius:20,textTransform:"uppercase",
-              background:src==="sheets"?"rgba(100,200,100,0.08)":"rgba(200,150,50,0.08)",
-              border:`1px solid ${src==="sheets"?"rgba(100,200,100,0.2)":"rgba(200,150,50,0.2)"}`,
-              color:src==="sheets"?"#6acc6a":"#c9a84c"}}>
-              {src==="sheets"?"📡 Live":"📦 Offline"}
+              background:(src==="sheets"||src==="backend")?"rgba(100,200,100,0.08)":"rgba(200,150,50,0.08)",
+              border:`1px solid ${(src==="sheets"||src==="backend")?"rgba(100,200,100,0.2)":"rgba(200,150,50,0.2)"}`,
+              color:(src==="sheets"||src==="backend")?"#6acc6a":"#c9a84c"}}>
+              {(src==="sheets"||src==="backend")?"📡 Live":"📦 Offline"}
             </span>
           )}
         </div>
@@ -606,7 +702,7 @@ function Nav({view,setView,cartCount,onCart,syncing,src,adminAuth,onLogoClick,on
 }
 
 // ── CATALOG ──────────────────────────────────────────────────────
-function Catalog({products,all,cats,cat,setCat,search,setSearch,margin,loading,addToCart,cMap}){
+function Catalog({products,all,cats,cat,setCat,tipoFiltro,setTipoFiltro,search,setSearch,margin,loading,addToCart,cMap}){
   if(loading) return <LoadingScreen/>;
   return(
     <main style={{maxWidth:1280,margin:"0 auto",padding:"64px 28px 100px"}}>
@@ -625,6 +721,12 @@ function Catalog({products,all,cats,cat,setCat,search,setSearch,margin,loading,a
             <button key={c} onClick={()=>setCat(c)} style={{padding:"6px 14px",borderRadius:20,cursor:"pointer",border:`1px solid ${cat===c?"#c9a84c":"rgba(255,255,255,0.06)"}`,background:cat===c?"rgba(201,168,76,0.1)":"none",color:cat===c?"#c9a84c":"#555",fontSize:"0.62rem",letterSpacing:"0.12em",fontFamily:"Jost,sans-serif",textTransform:"uppercase",transition:"all 0.18s"}}>{c}</button>
           ))}
         </div>
+        <div style={{width:1,height:24,background:"rgba(255,255,255,0.1)",margin:"0 4px"}}/>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          {["Todos", "Bultos (10 kg)", "Fraccionados"].map(c=>(
+            <button key={c} onClick={()=>setTipoFiltro(c)} style={{padding:"6px 14px",borderRadius:20,cursor:"pointer",border:`1px solid ${tipoFiltro===c?"#6acc6a":"rgba(255,255,255,0.06)"}`,background:tipoFiltro===c?"rgba(100,204,106,0.1)":"none",color:tipoFiltro===c?"#6acc6a":"#555",fontSize:"0.62rem",letterSpacing:"0.12em",fontFamily:"Jost,sans-serif",textTransform:"uppercase",transition:"all 0.18s"}}>{c}</button>
+          ))}
+        </div>
       </div>
       {products.length===0
         ?<div style={{textAlign:"center",padding:"80px 0",color:"#333"}}><Package size={36} style={{margin:"0 auto 14px",display:"block"}}/><p style={{fontSize:"0.8rem",letterSpacing:"0.1em"}}>Sin resultados</p></div>
@@ -637,20 +739,25 @@ function Catalog({products,all,cats,cat,setCat,search,setSearch,margin,loading,a
 }
 
 function ProductCard({p,margin,inCart,onAdd,delay}){
-  const price=sale(p.cost,margin);
+  const price=p.salePrice||sale(p.cost,margin);
   const bgs={"Nueces":"linear-gradient(135deg,#1c1508,#0e0b04)","Frutas Secas":"linear-gradient(135deg,#150a0a,#0a0505)","Mezclas":"linear-gradient(135deg,#0a0f14,#060a0d)","Semillas":"linear-gradient(135deg,#0d1308,#060a04)","Cereales":"linear-gradient(135deg,#140f08,#0a0804)"};
   return(
     <div className="card glass anim" style={{borderRadius:3,overflow:"hidden",animationDelay:`${delay}ms`}}>
       <div style={{height:200,background:bgs[p.category]||"linear-gradient(135deg,#111,#080808)",position:"relative",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden"}}>
         <div style={{position:"absolute",inset:0,background:"radial-gradient(ellipse at 40% 45%,rgba(201,168,76,0.07),transparent 65%)"}}/>
         <div style={{position:"absolute",inset:0,backgroundImage:"linear-gradient(rgba(201,168,76,0.025) 1px,transparent 1px),linear-gradient(90deg,rgba(201,168,76,0.025) 1px,transparent 1px)",backgroundSize:"32px 32px"}}/>
-        <span style={{fontSize:"3.6rem",position:"relative",filter:"drop-shadow(0 4px 16px rgba(0,0,0,0.7))"}}>{p.emoji}</span>
+        {p.imageUrl
+          ? <img src={p.imageUrl} alt={p.name} style={{width:"100%",height:"100%",objectFit:"cover",position:"absolute",inset:0}} onError={e=>{e.target.style.display="none";e.target.nextSibling.style.display="block";}}/>
+          : null
+        }
+        <span style={{fontSize:"3.6rem",position:"relative",filter:"drop-shadow(0 4px 16px rgba(0,0,0,0.7))",display:p.imageUrl?"none":"block"}}>{p.emoji}</span>
         <span className="pill" style={{position:"absolute",top:12,right:12}}>{p.category}</span>
         {inCart>0&&<div style={{position:"absolute",top:12,left:12,background:"#c9a84c",color:"#060606",borderRadius:"50%",width:22,height:22,fontSize:"0.65rem",fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>{inCart}</div>}
       </div>
       <div style={{padding:"18px 20px 22px"}}>
         <h3 className="serif" style={{fontSize:"1.08rem",fontWeight:400,color:"#e0d8c8",marginBottom:4}}>{p.name}</h3>
         <p style={{fontSize:"0.6rem",color:"#3a3530",letterSpacing:"0.16em",marginBottom:18}}>{p.unit}</p>
+        <p style={{fontSize:"0.52rem",color:p.tipo_producto==="bulto_10kg"?"#6acc6a":"#888",marginBottom:16,display:"flex",alignItems:"center",gap:4}}><Truck size={10}/> {p.tipo_producto==="bulto_10kg"?"Envío gratis en primer pedido":"Envío a cargo del comprador"}</p>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <span className="serif" style={{fontSize:"1.5rem",fontWeight:300,color:"#c9a84c"}}>{fmt(price)}</span>
           <button onClick={onAdd} className="gold" style={{padding:"9px 16px",borderRadius:2,display:"flex",alignItems:"center",gap:6}}><Plus size={11}/>{inCart>0?"Agregar más":"Agregar"}</button>
@@ -662,48 +769,121 @@ function ProductCard({p,margin,inCart,onAdd,delay}){
 
 // ── CART DRAWER ──────────────────────────────────────────────────
 function CartDrawer({cart,margin,total,count,updateQty,remove,onClose,onWA}){
+  const [checkoutStep, setCheckoutStep] = useState(false);
+  const [formData, setFormData] = useState({ name:"", lastname:"", email:"", phone:"", address:"", cuit:"" });
+  const [submitting, setSubmitting] = useState(false);
+  const totalKg = cart.reduce((s,i) => s + ((i.peso_kg || 1) * i.qty), 0);
+
+  const handleProceed = async () => {
+    if (!formData.name || !formData.lastname || !formData.phone || !formData.address) {
+      return alert("Por favor completá los datos obligatorios (Nombre, Apellido, Teléfono y Dirección)");
+    }
+    setSubmitting(true);
+    try {
+      const res = await fetch(`/api/orders`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientData: formData, cartData: cart, totalKg })
+      });
+      if (!res.ok) throw new Error("Error del servidor");
+      const data = await res.json();
+      onWA(data.order.shippingStatus, totalKg, formData);
+      onClose();
+    } catch (e) {
+      alert("No pudimos procesar la validación. Redirigiendo directo a WhatsApp...");
+      onWA("Sin validar (error de conexión)", totalKg, formData);
+      onClose();
+    }
+  };
+
+  const fv = (k,v) => setFormData(p => ({...p, [k]: v}));
+
   return(
     <div style={{position:"fixed",inset:0,zIndex:100}}>
       <div onClick={onClose} style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.75)",backdropFilter:"blur(8px)"}}/>
       <div style={{position:"absolute",right:0,top:0,bottom:0,width:"min(440px,100vw)",background:"#0d0d0d",borderLeft:"1px solid rgba(255,255,255,0.05)",display:"flex",flexDirection:"column",animation:"slideIn 0.3s cubic-bezier(0.4,0,0.2,1) both"}}>
         <div style={{padding:"22px 28px",borderBottom:"1px solid rgba(255,255,255,0.05)",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-          <div><h2 className="serif" style={{fontSize:"1.3rem",fontWeight:300,color:"#e8e0d0"}}>Tu Pedido</h2><p style={{fontSize:"0.56rem",letterSpacing:"0.24em",color:"#444",textTransform:"uppercase",marginTop:3}}>{count} artículo{count!==1?"s":""}</p></div>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            {checkoutStep && <button onClick={()=>setCheckoutStep(false)} style={{background:"none",border:"none",color:"#c9a84c",cursor:"pointer"}}><ChevronRight size={16} style={{transform:"rotate(180deg)"}}/></button>}
+            <div>
+              <h2 className="serif" style={{fontSize:"1.3rem",fontWeight:300,color:"#e8e0d0"}}>{checkoutStep?"Tus Datos":"Tu Pedido"}</h2>
+              <p style={{fontSize:"0.56rem",letterSpacing:"0.24em",color:"#444",textTransform:"uppercase",marginTop:3}}>
+                {checkoutStep ? "Paso final" : `${count} artículo${count!==1?"s":""} · ${totalKg.toFixed(2)} kg`}
+              </p>
+            </div>
+          </div>
           <button onClick={onClose} style={{background:"none",border:"1px solid rgba(255,255,255,0.07)",padding:8,borderRadius:2,cursor:"pointer",color:"#555"}}><X size={14}/></button>
         </div>
+
         <div style={{flex:1,overflowY:"auto",padding:"8px 28px"}}>
-          {cart.length===0
-            ?<div style={{textAlign:"center",padding:"64px 0",color:"#2a2a2a"}}><Package size={36} style={{margin:"0 auto 14px",display:"block"}}/><p style={{fontSize:"0.75rem",letterSpacing:"0.1em"}}>Tu carrito está vacío</p></div>
-            :cart.map(item=>{const p=sale(item.cost,margin);return(
-              <div key={item.id} style={{padding:"16px 0",borderBottom:"1px solid rgba(255,255,255,0.03)",display:"flex",alignItems:"center",gap:14}}>
-                <span style={{fontSize:"1.6rem",flexShrink:0}}>{item.emoji}</span>
-                <div style={{flex:1,minWidth:0}}>
-                  <p className="serif" style={{fontSize:"0.92rem",color:"#ddd",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.name}</p>
-                  <p style={{fontSize:"0.6rem",color:"#c9a84c",marginTop:2}}>{fmt(p)} × unidad</p>
+          {!checkoutStep ? (
+            cart.length===0
+              ?<div style={{textAlign:"center",padding:"64px 0",color:"#2a2a2a"}}><Package size={36} style={{margin:"0 auto 14px",display:"block"}}/><p style={{fontSize:"0.75rem",letterSpacing:"0.1em"}}>Tu carrito está vacío</p></div>
+              :cart.map(item=>{const p=item.salePrice||sale(item.cost,margin);return(
+                <div key={item.id} style={{padding:"16px 0",borderBottom:"1px solid rgba(255,255,255,0.03)",display:"flex",alignItems:"center",gap:14}}>
+                  <span style={{fontSize:"1.6rem",flexShrink:0}}>{item.emoji}</span>
+                  <div style={{flex:1,minWidth:0}}>
+                    <p className="serif" style={{fontSize:"0.92rem",color:"#ddd",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.name}</p>
+                    <p style={{fontSize:"0.6rem",color:"#c9a84c",marginTop:2,display:"flex",alignItems:"center",gap:6}}>
+                      {fmt(p)} × unidad <span style={{color:"#555"}}>· {(item.peso_kg||1)}kg</span>
+                    </p>
+                  </div>
+                  <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                    <button className="qb" onClick={()=>updateQty(item.id,-1)}><Minus size={11}/></button>
+                    <span style={{fontSize:"0.88rem",color:"#e8e0d0",minWidth:18,textAlign:"center"}}>{item.qty}</span>
+                    <button className="qb" onClick={()=>updateQty(item.id,1)}><Plus size={11}/></button>
+                  </div>
+                  <div style={{textAlign:"right",flexShrink:0}}>
+                    <p style={{fontSize:"0.9rem",color:"#e8e0d0"}}>{fmt(p*item.qty)}</p>
+                    <button onClick={()=>remove(item.id)} style={{background:"none",border:"none",cursor:"pointer",color:"#2a2520",fontSize:"0.56rem",letterSpacing:"0.1em",marginTop:4,transition:"color 0.2s",fontFamily:"Jost,sans-serif"}}
+                      onMouseEnter={e=>e.currentTarget.style.color="#c97a7a"} onMouseLeave={e=>e.currentTarget.style.color="#2a2520"}>quitar</button>
+                  </div>
                 </div>
-                <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
-                  <button className="qb" onClick={()=>updateQty(item.id,-1)}><Minus size={11}/></button>
-                  <span style={{fontSize:"0.88rem",color:"#e8e0d0",minWidth:18,textAlign:"center"}}>{item.qty}</span>
-                  <button className="qb" onClick={()=>updateQty(item.id,1)}><Plus size={11}/></button>
-                </div>
-                <div style={{textAlign:"right",flexShrink:0}}>
-                  <p style={{fontSize:"0.9rem",color:"#e8e0d0"}}>{fmt(p*item.qty)}</p>
-                  <button onClick={()=>remove(item.id)} style={{background:"none",border:"none",cursor:"pointer",color:"#2a2520",fontSize:"0.56rem",letterSpacing:"0.1em",marginTop:4,transition:"color 0.2s",fontFamily:"Jost,sans-serif"}}
-                    onMouseEnter={e=>e.currentTarget.style.color="#c97a7a"} onMouseLeave={e=>e.currentTarget.style.color="#2a2520"}>quitar</button>
-                </div>
+              )})
+          ) : (
+            <div style={{padding:"12px 0",display:"flex",flexDirection:"column",gap:14}} className="anim">
+              <p style={{fontSize:"0.62rem",color:"#888",marginBottom:8}}>Completá tus datos para agilizar el envío y validar si aplicás a beneficios de compra.</p>
+              <div style={{display:"flex",gap:10}}>
+                <div style={{flex:1}}><p style={{fontSize:"0.56rem",color:"#555",marginBottom:4}}>Nombre *</p><input className="ci" autoFocus value={formData.name} onChange={e=>fv("name",e.target.value)} /></div>
+                <div style={{flex:1}}><p style={{fontSize:"0.56rem",color:"#555",marginBottom:4}}>Apellido *</p><input className="ci" value={formData.lastname} onChange={e=>fv("lastname",e.target.value)} /></div>
               </div>
-            );})
-          }
+              <div style={{display:"flex",gap:10}}>
+                <div style={{flex:1}}><p style={{fontSize:"0.56rem",color:"#555",marginBottom:4}}>Teléfono (WA) *</p><input className="ci" type="tel" value={formData.phone} onChange={e=>fv("phone",e.target.value)} /></div>
+                <div style={{flex:1}}><p style={{fontSize:"0.56rem",color:"#555",marginBottom:4}}>CUIT / CUIL</p><input className="ci" value={formData.cuit} onChange={e=>fv("cuit",e.target.value)} /></div>
+              </div>
+              <div><p style={{fontSize:"0.56rem",color:"#555",marginBottom:4}}>Dirección de Envío *</p><input className="ci" value={formData.address} onChange={e=>fv("address",e.target.value)} /></div>
+              <div><p style={{fontSize:"0.56rem",color:"#555",marginBottom:4}}>Email (Opcional)</p><input className="ci" type="email" value={formData.email} onChange={e=>fv("email",e.target.value)} /></div>
+            </div>
+          )}
         </div>
-        <div style={{padding:"22px 28px",borderTop:"1px solid rgba(255,255,255,0.05)"}}>
+        
+        <div style={{padding:"22px 28px",borderTop:"1px solid rgba(255,255,255,0.05)",background:(totalKg>=10 && !checkoutStep)?"rgba(100,200,100,0.03)":"transparent"}}>
+          {!checkoutStep && (
+            <div style={{marginBottom:16}}>
+              {totalKg >= 10 ? (
+                <p style={{fontSize:"0.6rem",color:"#6acc6a",display:"flex",alignItems:"center",gap:6}}><CheckCircle size={12}/> Este pedido califica para <b>Validación de Envío Gratis</b>.</p>
+              ) : (
+                <p style={{fontSize:"0.6rem",color:"#888",display:"flex",alignItems:"center",gap:6}}><Truck size={12} style={{color:"#c9a84c"}}/> Te faltan {(10 - totalKg).toFixed(2)} kg para acceder a envío gratis en tu primer pedido.</p>
+              )}
+            </div>
+          )}
+          
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:8}}>
             <span style={{fontSize:"0.6rem",letterSpacing:"0.26em",color:"#444",textTransform:"uppercase"}}>Total estimado</span>
             <span className="serif" style={{fontSize:"2rem",fontWeight:300,color:"#c9a84c"}}>{fmt(total)}</span>
           </div>
           <div style={{height:1,background:"linear-gradient(90deg,transparent,rgba(201,168,76,0.2),transparent)",marginBottom:20}}/>
-          <button onClick={onWA} disabled={cart.length===0} className="gold" style={{width:"100%",padding:"14px",borderRadius:2,display:"flex",alignItems:"center",justifyContent:"center",gap:10,fontSize:"0.7rem",letterSpacing:"0.14em"}}>
-            <MessageCircle size={15}/>Finalizar por WhatsApp<ChevronRight size={14}/>
-          </button>
-          <p style={{textAlign:"center",marginTop:12,fontSize:"0.54rem",color:"#2a2520",letterSpacing:"0.14em",textTransform:"uppercase"}}>Se abre WhatsApp con tu pedido listo</p>
+          
+          {!checkoutStep ? (
+            <button onClick={()=>setCheckoutStep(true)} disabled={cart.length===0} className="gold" style={{width:"100%",padding:"14px",borderRadius:2,display:"flex",alignItems:"center",justifyContent:"center",gap:10,fontSize:"0.7rem",letterSpacing:"0.14em"}}>
+              Continuar <ChevronRight size={14}/>
+            </button>
+          ) : (
+            <button onClick={handleProceed} disabled={submitting} className="gold" style={{width:"100%",padding:"14px",borderRadius:2,display:"flex",alignItems:"center",justifyContent:"center",gap:10,fontSize:"0.7rem",letterSpacing:"0.14em",background:submitting?"#555":"linear-gradient(135deg,#c9a84c,#dbbe6a)"}}>
+              <MessageCircle size={15}/> {submitting ? "Validando..." : "Finalizar por WhatsApp"}
+            </button>
+          )}
+          <p style={{textAlign:"center",marginTop:12,fontSize:"0.54rem",color:"#2a2520",letterSpacing:"0.14em",textTransform:"uppercase"}}>{checkoutStep ? "Tus datos se guardarán de forma segura" : "Checkout rápido y seguro"}</p>
         </div>
       </div>
     </div>
@@ -769,7 +949,7 @@ function ChatFAB({open,setOpen,products,kb}){
 // ═══════════════════════════════════════════════════════════════
 // ADMIN
 // ═══════════════════════════════════════════════════════════════
-function Admin({products,margin,setMargin,syncing,syncOk,src,onSync,kb,onKb,kbReady,tab,setTab,kbSync,marginSync}){
+function Admin({products,margin,setMargin,syncing,syncOk,src,onSync,kb,onKb,kbReady,tab,setTab,kbSync,marginSync,adminToken}){
   return(
     <main style={{maxWidth:1100,margin:"0 auto",padding:"44px 28px 100px"}}>
       <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:32}}>
@@ -782,8 +962,8 @@ function Admin({products,margin,setMargin,syncing,syncOk,src,onSync,kb,onKb,kbRe
         </button>
       </div>
       {syncOk===true&&(
-        <div style={{background:src==="sheets"?"rgba(100,180,100,0.05)":"rgba(200,150,50,0.05)",border:`1px solid ${src==="sheets"?"rgba(100,180,100,0.18)":"rgba(200,150,50,0.18)"}`,borderRadius:2,padding:"10px 16px",marginBottom:24,display:"flex",alignItems:"center",gap:10,fontSize:"0.68rem",color:src==="sheets"?"#80b880":"#c9a84c",letterSpacing:"0.06em"}}>
-          <CheckCircle size={13}/>{src==="sheets"?`✅ Google Sheets · ${products.length} productos · columna "remito" + ${margin}% margen`:`⚠️ Datos offline (${products.length} productos).`}
+        <div style={{background:(src==="sheets"||src==="backend")?"rgba(100,180,100,0.05)":"rgba(200,150,50,0.05)",border:`1px solid ${(src==="sheets"||src==="backend")?"rgba(100,180,100,0.18)":"rgba(200,150,50,0.18)"}`,borderRadius:2,padding:"10px 16px",marginBottom:24,display:"flex",alignItems:"center",gap:10,fontSize:"0.68rem",color:(src==="sheets"||src==="backend")?"#80b880":"#c9a84c",letterSpacing:"0.06em"}}>
+          <CheckCircle size={13}/>{(src==="sheets"||src==="backend")?`✅ Catálogo sincronizado · ${products.length} productos · ${margin}% margen`:`⚠️ Datos offline (${products.length} productos).`}
         </div>
       )}
       {syncOk===false&&(
@@ -792,12 +972,12 @@ function Admin({products,margin,setMargin,syncing,syncOk,src,onSync,kb,onKb,kbRe
         </div>
       )}
       <div style={{display:"flex",borderBottom:"1px solid rgba(255,255,255,0.05)",marginBottom:32,overflowX:"auto"}}>
-        {[{k:"kb",l:"🧠 Base de Conocimiento"},{k:"prices",l:"💰 Precios"},{k:"bot",l:"📱 Bot WA→Telegram"}].map(t=>(
+        {[{k:"kb",l:"🧠 Base de Conocimiento"},{k:"prices",l:"💰 Precios y Nombres"},{k:"bot",l:"📱 Bot WA→Telegram"}].map(t=>(
           <button key={t.k} className={`tab${tab===t.k?" on":""}`} onClick={()=>setTab(t.k)}>{t.l}</button>
         ))}
       </div>
       {tab==="kb"     && <KBEditor kb={kb} onKb={onKb} kbReady={kbReady} kbSync={kbSync}/>}
-      {tab==="prices" && <PricesTab products={products} margin={margin} setMargin={setMargin} marginSync={marginSync}/>}
+      {tab==="prices" && <PricesTab products={products} margin={margin} setMargin={setMargin} marginSync={marginSync} adminToken={adminToken} onSync={onSync}/>}
       {tab==="bot"    && <BotTab/>}
     </main>
   );
@@ -992,9 +1172,70 @@ function Label({text}){
 // ═══════════════════════════════════════════════════════════════
 // PRICES TAB
 // ═══════════════════════════════════════════════════════════════
-function PricesTab({products,margin,setMargin,marginSync}){
+function PricesTab({products,margin,setMargin,marginSync,adminToken,onSync}){
   const [showCosts,setShowCosts]=useState(false);
+  const [editingName,setEditingName]=useState(null); // product id being edited
+  const [nameInput,setNameInput]=useState("");
+  const [savingName,setSavingName]=useState(null);
+  const [nameFlash,setNameFlash]=useState(null); // product id that just saved
   const rangeStyle={"--pct":`${margin}%`};
+
+  // Guardar nombre personalizado
+  const saveNameOverride = async (product) => {
+    const newName = nameInput.trim();
+    const originalName = product.originalName || product.name;
+    if (!newName || newName === product.name) {
+      setEditingName(null);
+      return;
+    }
+    setSavingName(product.id);
+    try {
+      const res = await fetch(`${CONFIG.BACKEND_URL}/api/admin/catalog/name-override`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          ...(adminToken ? { Authorization: `Bearer ${adminToken}` } : {}),
+        },
+        body: JSON.stringify({ originalName, customName: newName }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setEditingName(null);
+      setNameFlash(product.id);
+      setTimeout(() => setNameFlash(null), 2500);
+      // Resync catalog to reflect changes
+      if (onSync) onSync();
+    } catch (err) {
+      console.error("[NameOverride] Error:", err);
+      alert("Error guardando nombre: " + err.message);
+    } finally {
+      setSavingName(null);
+    }
+  };
+
+  // Resetear nombre al original
+  const resetName = async (product) => {
+    const originalName = product.originalName || product.name;
+    setSavingName(product.id);
+    try {
+      const res = await fetch(`${CONFIG.BACKEND_URL}/api/admin/catalog/name-override`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          ...(adminToken ? { Authorization: `Bearer ${adminToken}` } : {}),
+        },
+        body: JSON.stringify({ originalName, customName: "" }), // empty = remove override
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setEditingName(null);
+      setNameFlash(product.id);
+      setTimeout(() => setNameFlash(null), 2500);
+      if (onSync) onSync();
+    } catch (err) {
+      console.error("[NameReset] Error:", err);
+    } finally {
+      setSavingName(null);
+    }
+  };
 
   // Indicador de sincronización del margen con el bot
   const MarginSyncStatus = () => {
@@ -1063,9 +1304,19 @@ function PricesTab({products,margin,setMargin,marginSync}){
           <p style={{fontSize:"0.6rem",color:"#555",fontFamily:"monospace"}}>Precio Venta = Precio Remito × (1 + <span style={{color:"#c9a84c"}}>{margin}</span>/100) → factor: <span style={{color:"#c9a84c"}}>×{(1+margin/100).toFixed(2)}</span></p>
         </div>
       </div>
+
+      {/* Nota explicativa sobre nombres editables */}
+      <div style={{background:"rgba(201,168,76,0.04)",border:"1px solid rgba(201,168,76,0.12)",borderRadius:2,padding:"12px 16px",marginBottom:20,display:"flex",alignItems:"flex-start",gap:10}}>
+        <Edit3 size={14} style={{color:"#c9a84c",flexShrink:0,marginTop:2}}/>
+        <div>
+          <p style={{fontSize:"0.68rem",color:"#c9a84c",fontWeight:500,marginBottom:3}}>Nombres editables</p>
+          <p style={{fontSize:"0.6rem",color:"#666",lineHeight:1.6}}>Podés personalizar el nombre de cada producto como se muestra en la tienda y el bot. La referencia al nombre original de la lista siempre aparece debajo. Los cambios se aplican en la web, chat IA, y bot Telegram/WhatsApp.</p>
+        </div>
+      </div>
+
       <div className="glass" style={{borderRadius:3,overflow:"hidden"}}>
         <div style={{padding:"13px 20px",borderBottom:"1px solid rgba(255,255,255,0.045)",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-          <span style={{fontSize:"0.56rem",letterSpacing:"0.22em",color:"#555",textTransform:"uppercase"}}>{products.length} productos</span>
+          <span style={{fontSize:"0.56rem",letterSpacing:"0.22em",color:"#555",textTransform:"uppercase"}}>{products.length} productos · {products.filter(p=>p.isNameOverride).length} con nombre personalizado</span>
           <button onClick={()=>setShowCosts(!showCosts)} style={{background:"none",border:"none",cursor:"pointer",color:"#444",display:"flex",alignItems:"center",gap:6,fontSize:"0.56rem",letterSpacing:"0.14em",textTransform:"uppercase",fontFamily:"Jost,sans-serif",transition:"color 0.2s"}}
             onMouseEnter={e=>e.currentTarget.style.color="#c9a84c"} onMouseLeave={e=>e.currentTarget.style.color="#444"}>
             {showCosts?<EyeOff size={12}/>:<Eye size={12}/>}{showCosts?"Ocultar costos":"Ver costos (remito)"}
@@ -1073,21 +1324,89 @@ function PricesTab({products,margin,setMargin,marginSync}){
         </div>
         <table style={{width:"100%",borderCollapse:"collapse"}}>
           <thead><tr style={{borderBottom:"1px solid rgba(255,255,255,0.04)"}}>
-            {["Producto","Cat.","Unidad",...(showCosts?["Costo Remito"]:[]),"Precio Venta","Ganancia"].map(h=>(
-              <th key={h} style={{padding:"10px 18px",textAlign:"left",fontSize:"0.52rem",letterSpacing:"0.2em",color:"#3a3530",textTransform:"uppercase",fontWeight:400}}>{h}</th>
+            {["Producto (editable)","Ref. Lista",...(showCosts?["Costo Remito"]:[]),"Precio Venta","Ganancia",""].map(h=>(
+              <th key={h} style={{padding:"10px 14px",textAlign:"left",fontSize:"0.52rem",letterSpacing:"0.2em",color:"#3a3530",textTransform:"uppercase",fontWeight:400}}>{h}</th>
             ))}
           </tr></thead>
           <tbody>
             {products.map((p,i)=>{
-              const s=sale(p.cost,margin);const g=s-p.cost;const gp=((g/p.cost)*100).toFixed(1);
+              const s=p.salePrice||sale(p.cost,margin);const g=s-p.cost;const gp=p.cost>0?((g/p.cost)*100).toFixed(1):"0";
+              const hasCustomName = p.isNameOverride && p.originalName && p.name !== p.originalName;
+              const isEditing = editingName === p.id;
+              const isSaving = savingName === p.id;
+              const justSaved = nameFlash === p.id;
               return(
                 <tr key={p.id} className="rh" style={{borderBottom:"1px solid rgba(255,255,255,0.028)",background:i%2===0?"transparent":"rgba(255,255,255,0.007)"}}>
-                  <td style={{padding:"12px 18px"}}><div style={{display:"flex",alignItems:"center",gap:9}}><span style={{fontSize:"1.1rem"}}>{p.emoji}</span><span className="serif" style={{fontSize:"0.9rem",color:"#d0c8b8"}}>{p.name}</span></div></td>
-                  <td style={{padding:"12px 18px"}}><span className="pill">{p.category}</span></td>
-                  <td style={{padding:"12px 18px",fontSize:"0.68rem",color:"#444"}}>{p.unit}</td>
-                  {showCosts&&<td style={{padding:"12px 18px",fontSize:"0.8rem",color:"#555",fontFamily:"monospace"}}>{fmt(p.cost)}</td>}
-                  <td style={{padding:"12px 18px"}}><span className="serif" style={{fontSize:"0.96rem",color:"#c9a84c"}}>{fmt(s)}</span></td>
-                  <td style={{padding:"12px 18px"}}><div style={{display:"flex",alignItems:"center",gap:6}}><span style={{fontSize:"0.76rem",color:"#6aaf6a"}}>+{fmt(g)}</span><span style={{fontSize:"0.5rem",color:"#4a804a",background:"rgba(100,180,100,0.07)",border:"1px solid rgba(100,180,100,0.14)",padding:"2px 6px",borderRadius:20}}>{gp}%</span></div></td>
+                  {/* Nombre editable */}
+                  <td style={{padding:"10px 14px",minWidth:220}}>
+                    {isEditing ? (
+                      <div style={{display:"flex",alignItems:"center",gap:6}}>
+                        <span style={{fontSize:"1.1rem",flexShrink:0}}>{p.emoji}</span>
+                        <input
+                          className="fi"
+                          type="text"
+                          value={nameInput}
+                          onChange={e=>setNameInput(e.target.value)}
+                          onKeyDown={e=>{if(e.key==="Enter")saveNameOverride(p);if(e.key==="Escape")setEditingName(null);}}
+                          autoFocus
+                          style={{fontSize:"0.82rem",padding:"6px 10px",minWidth:160}}
+                          placeholder="Nombre para la tienda"
+                        />
+                        <button onClick={()=>saveNameOverride(p)} disabled={isSaving}
+                          style={{background:"none",border:"1px solid rgba(100,200,100,0.3)",borderRadius:2,padding:"5px 8px",cursor:"pointer",color:"#6acc6a",display:"flex",alignItems:"center",flexShrink:0}}
+                          title="Guardar">
+                          {isSaving?<span style={{width:12,height:12,border:"1.5px solid #6acc6a",borderTopColor:"transparent",borderRadius:"50%",animation:"spin 0.6s linear infinite",display:"inline-block"}}/>:<Save size={13}/>}
+                        </button>
+                        <button onClick={()=>setEditingName(null)}
+                          style={{background:"none",border:"1px solid rgba(255,255,255,0.07)",borderRadius:2,padding:"5px 8px",cursor:"pointer",color:"#555",display:"flex",alignItems:"center",flexShrink:0}}
+                          title="Cancelar">
+                          <X size={13}/>
+                        </button>
+                      </div>
+                    ) : (
+                      <div style={{display:"flex",alignItems:"center",gap:9}}>
+                        <span style={{fontSize:"1.1rem",flexShrink:0}}>{p.emoji}</span>
+                        <div style={{minWidth:0}}>
+                          <div style={{display:"flex",alignItems:"center",gap:6}}>
+                            <span className="serif" style={{fontSize:"0.88rem",color:hasCustomName?"#c9a84c":"#d0c8b8"}}>{p.name}</span>
+                            {hasCustomName && <span style={{fontSize:"0.44rem",padding:"1px 5px",borderRadius:10,background:"rgba(201,168,76,0.12)",border:"1px solid rgba(201,168,76,0.22)",color:"#c9a84c",letterSpacing:"0.1em",textTransform:"uppercase",flexShrink:0}}>editado</span>}
+                            {justSaved && <span style={{fontSize:"0.5rem",color:"#6acc6a",display:"flex",alignItems:"center",gap:3}}><CheckCircle size={10}/>ok</span>}
+                          </div>
+                          <span className="pill" style={{fontSize:"0.44rem",marginTop:2,display:"inline-block"}}>{p.category} · {p.unit}</span>
+                        </div>
+                        <button
+                          onClick={()=>{setEditingName(p.id);setNameInput(p.name);}}
+                          style={{background:"none",border:"1px solid rgba(255,255,255,0.06)",borderRadius:2,padding:"4px 7px",cursor:"pointer",color:"#3a3530",display:"flex",alignItems:"center",flexShrink:0,transition:"all 0.2s",marginLeft:"auto"}}
+                          onMouseEnter={e=>{e.currentTarget.style.borderColor="rgba(201,168,76,0.3)";e.currentTarget.style.color="#c9a84c";}}
+                          onMouseLeave={e=>{e.currentTarget.style.borderColor="rgba(255,255,255,0.06)";e.currentTarget.style.color="#3a3530";}}
+                          title="Editar nombre">
+                          <Edit3 size={11}/>
+                        </button>
+                      </div>
+                    )}
+                  </td>
+                  {/* Referencia al nombre original de la lista */}
+                  <td style={{padding:"10px 14px",maxWidth:180}}>
+                    {(p.originalName && p.originalName !== p.name) ? (
+                      <div>
+                        <p style={{fontSize:"0.62rem",color:"#444",lineHeight:1.3,fontStyle:"italic"}} title={`Nombre en la lista de precios: ${p.originalName}`}>
+                          🏷️ {p.originalName}
+                        </p>
+                        <button onClick={()=>resetName(p)} disabled={isSaving}
+                          style={{background:"none",border:"none",cursor:"pointer",color:"#3a3530",fontSize:"0.48rem",letterSpacing:"0.08em",marginTop:3,padding:0,fontFamily:"Jost,sans-serif",transition:"color 0.2s",textTransform:"uppercase"}}
+                          onMouseEnter={e=>e.currentTarget.style.color="#c97a7a"}
+                          onMouseLeave={e=>e.currentTarget.style.color="#3a3530"}>
+                          restaurar original
+                        </button>
+                      </div>
+                    ) : (
+                      <span style={{fontSize:"0.56rem",color:"#2a2520",fontStyle:"italic"}}>= nombre de lista</span>
+                    )}
+                  </td>
+                  {showCosts&&<td style={{padding:"10px 14px",fontSize:"0.8rem",color:"#555",fontFamily:"monospace"}}>{fmt(p.cost)}</td>}
+                  <td style={{padding:"10px 14px"}}><span className="serif" style={{fontSize:"0.96rem",color:"#c9a84c"}}>{fmt(s)}</span></td>
+                  <td style={{padding:"10px 14px"}}><div style={{display:"flex",alignItems:"center",gap:6}}><span style={{fontSize:"0.76rem",color:"#6aaf6a"}}>+{fmt(g)}</span><span style={{fontSize:"0.5rem",color:"#4a804a",background:"rgba(100,180,100,0.07)",border:"1px solid rgba(100,180,100,0.14)",padding:"2px 6px",borderRadius:20}}>{gp}%</span></div></td>
+                  <td style={{padding:"10px 14px"}}></td>
                 </tr>
               );
             })}

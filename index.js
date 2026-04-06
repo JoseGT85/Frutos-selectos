@@ -32,6 +32,7 @@ import { settings }               from "./settings-service.js";
 import kbRoutes                   from "./routes/kb.js";
 import adminRoutes, { setOrchestratorRef, setCatalogRef } from "./routes/admin.js";
 import waRoutes, { setWhatsAppRefs, getWhatsAppStats }    from "./routes/whatsapp.js";
+import ordersRoutes               from "./routes/orders.js";
 
 dotenv.config();
 
@@ -500,6 +501,7 @@ app.get("/api/catalog", async (req, res) => {
 
 app.use("/api/kb",    kbRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/orders", ordersRoutes);
 
 // WhatsApp Cloud API webhook — Meta envía los mensajes de clientes acá
 // Configurar en Meta: Webhook URL = https://tu-dominio.com/webhook/whatsapp

@@ -122,6 +122,12 @@ export class ProductCatalog {
   }
 
   // ─── Sheet parser ──────────────────────────────────────────────────────────
+  // Estructura de la hoja (multi-sección):
+  //   Fila header:     PRODUCTO | PRESENTACIÓN | | REMITO    | |     | PX (IVA) |
+  //   Fila sub-header: |        |              | | KG        | BULTO | | KG    | BULTO
+  //   Fila datos:      ALMENDRA | CAJA X 10 KG | | $18.862   | $188.629 | | ...
+  //
+  // Usamos: REMITO → BULTO como precio base, PRESENTACIÓN como unidad
   async #fetchFromSheets() {
     if (!SHEETS_URL) return FALLBACK_PRODUCTS;
 
@@ -132,52 +138,120 @@ export class ProductCatalog {
       const csvText = await res.text();
       const rows = this.#parseCSV(csvText);
 
-      let headerIdx = -1, costCol = -1, nameCol = 0, unitCol = -1;
+      // Detectar estructura de columnas en la primera aparición del header
+      let nameCol = 0, presCol = 1, bultoCol = -1, kgCol = -1;
+      let foundHeader = false;
 
-      // Buscar encabezado
       for (let i = 0; i < rows.length; i++) {
-        const cells = rows[i].map(c => c.toLowerCase());
-        const ri = cells.findIndex(c => c.includes("remito"));
-        if (ri > -1) {
-          headerIdx = i;
-          costCol = ri;
-          unitCol = cells.findIndex(c => /kg|g\b|unidad|presentac/.test(c));
+        const cells = rows[i].map(c => c.toLowerCase().trim());
+        const remitoIdx = cells.findIndex(c => c.includes("remito"));
+        if (remitoIdx > -1) {
+          // Esta fila tiene "REMITO" — buscar PRODUCTO y PRESENTACIÓN
           nameCol = cells.findIndex(c => /producto|artículo|descripción|nombre/.test(c));
           if (nameCol === -1) nameCol = 0;
+          presCol = cells.findIndex(c => /presentac/.test(c));
+          if (presCol === -1) presCol = 1;
+
+          // La siguiente fila debería tener KG y BULTO como sub-columnas
+          if (i + 1 < rows.length) {
+            const subCells = rows[i + 1].map(c => c.toLowerCase().trim());
+            // Buscar BULTO que esté en la zona de REMITO (columnas cercanas a remitoIdx)
+            for (let j = remitoIdx; j < Math.min(remitoIdx + 3, subCells.length); j++) {
+              if (subCells[j].includes("bulto")) { bultoCol = j; }
+              if (subCells[j] === "kg") { kgCol = j; }
+            }
+          }
+
+          // Fallback: si no encontramos BULTO, usar la columna siguiente a REMITO
+          if (bultoCol === -1) bultoCol = remitoIdx + 1;
+          if (kgCol === -1) kgCol = remitoIdx;
+
+          foundHeader = true;
+          console.log(`[CATALOG] Estructura detectada: nombre=col${nameCol}, presentación=col${presCol}, remito_kg=col${kgCol}, remito_bulto=col${bultoCol}`);
           break;
         }
       }
 
-      if (headerIdx === -1 || costCol === -1) {
-        throw new Error("No se pudo detectar la estructura de la hoja (falta columna 'remito')");
+      if (!foundHeader || bultoCol === -1) {
+        throw new Error("No se pudo detectar la estructura de la hoja (falta columna 'remito' con sub-columna 'bulto')");
       }
 
+      // Parsear todas las filas de datos, saltando headers y secciones
       const products = [];
-      for (let i = headerIdx + 1; i < rows.length; i++) {
-        const cells = rows[i];
-        if (cells.length <= costCol) continue;
+      let currentSection = "General";
+      let productId = 0;
 
+      for (let i = 0; i < rows.length; i++) {
+        const cells = rows[i];
+        if (!cells || cells.length < 2) continue;
+
+        const cell0 = (cells[0] || "").trim();
+        const cell0Lower = cell0.toLowerCase();
+
+        // Detectar filas de header/sub-header → saltar
+        if (cell0Lower.includes("producto") && (cells[1] || "").toLowerCase().includes("presentac")) continue;
+        // Sub-header con KG/BULTO → saltar
+        if (!cell0 || cell0.trim() === "") {
+          const c3 = (cells[3] || "").toLowerCase().trim();
+          if (c3 === "kg" || c3.includes("unidad")) continue;
+        }
+        // Detectar filas de sección (solo texto en primera columna, sin precio en BULTO)
+        const bultoRaw = (cells[bultoCol] || "").trim();
+        if (cell0 && !bultoRaw && cell0.length > 3) {
+          // Podría ser un título de sección (sin datos en la columna BULTO)
+          // Solo actualizar la sección si parece un título con asterisco o paréntesis
+          if (/[*(]/.test(cell0) || cell0 === cell0.toUpperCase()) {
+            currentSection = cell0;
+          }
+          continue;
+        }
+
+        // Si no hay nombre → saltar
         const name = cells[nameCol]?.trim();
         if (!name || name.length < 2) continue;
 
-        // Limpieza de precio robusta ($ 18.862,95 -> 18862.95)
-        const raw = cells[costCol]?.trim()
+        // Saltar filas descriptivas (recetas, notas, etc.)
+        if (/^(mix .+\(|recetas sujetas)/i.test(name) && !bultoRaw) continue;
+
+        // Parsear precio BULTO: "$ 188.629,55" → 188629.55
+        const rawBulto = bultoRaw
           .replace(/[^0-9,.]/g, "")
           .replace(/\./g, "")
           .replace(",", ".");
-          
-        const cost = parseFloat(raw);
-        if (isNaN(cost) || cost <= 0) continue;
+        const costBulto = parseFloat(rawBulto);
+        if (isNaN(costBulto) || costBulto <= 0) continue;
 
-        const unit = unitCol > -1
-          ? cells[unitCol]?.trim() || "1kg"
-          : "1kg";
+        // Parsear precio KG como referencia
+        const rawKg = (cells[kgCol] || "").trim()
+          .replace(/[^0-9,.]/g, "")
+          .replace(/\./g, "")
+          .replace(",", ".");
+        const costKg = parseFloat(rawKg) || 0;
+
+        // Presentación como unidad
+        const presentation = cells[presCol]?.trim() || "";
+        const unit = presentation || "Bulto";
+
         const { category, emoji } = inferCategory(name);
+        const { peso_kg, tipo_producto } = inferWeightAndType(unit, name);
 
-        products.push({ id: i, name, cost, category, unit, emoji });
+        productId++;
+        products.push({
+          id: productId,
+          name,
+          cost: costBulto,       // Precio REMITO BULTO (base para margen)
+          costPerKg: costKg,     // Referencia precio por kg
+          category,
+          unit,                  // Presentación (ej: "CAJA X 10 KG")
+          emoji,
+          section: currentSection,
+          peso_kg,
+          tipo_producto,
+        });
       }
 
-      return products.length > 5 ? products : FALLBACK_PRODUCTS;
+      console.log(`[CATALOG] Parseados ${products.length} productos con precio REMITO BULTO`);
+      return products.length > 3 ? products : FALLBACK_PRODUCTS;
     } catch (err) {
       console.error("[CATALOG] Critical sync error:", err.message);
       throw err;
@@ -256,8 +330,34 @@ function inferCategory(name) {
   return { category: "Otros", emoji: "🌿" };
 }
 
+// ─── Inferencia de peso y tipo_producto ──────────────────────────────────────
+function inferWeightAndType(unit, name) {
+  let peso_kg = 1;
+  let tipo_producto = "fraccionado";
+  
+  const u = (unit || "").toLowerCase();
+  const n = (name || "").toLowerCase();
+
+  let matchKg = u.match(/(\d+(?:[\.,]\d+)?)\s*kg/);
+  if (matchKg) {
+    peso_kg = parseFloat(matchKg[1].replace(',', '.'));
+  } else {
+    let matchG = u.match(/(\d+)\s*g/);
+    if (matchG) {
+      peso_kg = parseInt(matchG[1], 10) / 1000;
+    }
+  }
+
+  if (u.includes("bulto") || n.includes("bulto") || peso_kg >= 10) {
+    if (!matchKg && !matchG) peso_kg = 10;
+    tipo_producto = "bulto_10kg";
+  }
+
+  return { peso_kg, tipo_producto };
+}
+
 // ─── Datos fallback ──────────────────────────────────────────────────────────
-const FALLBACK_PRODUCTS = [
+const rawFallbackParams = [
   { id: 1,  name: "Almendras Natural",     cost: 2800, category: "Nueces",       unit: "500g", emoji: "🌰" },
   { id: 2,  name: "Almendras Blanqueadas", cost: 3200, category: "Nueces",       unit: "500g", emoji: "🌰" },
   { id: 3,  name: "Nueces Mariposa",       cost: 4500, category: "Nueces",       unit: "500g", emoji: "🥜" },
@@ -275,4 +375,10 @@ const FALLBACK_PRODUCTS = [
   { id: 15, name: "Semillas de Chía",      cost: 1200, category: "Semillas",     unit: "500g", emoji: "🌱" },
   { id: 16, name: "Semillas de Lino",      cost: 800,  category: "Semillas",     unit: "500g", emoji: "🌾" },
   { id: 17, name: "Granola Artesanal",     cost: 2400, category: "Cereales",     unit: "500g", emoji: "🥣" },
+  { id: 18, name: "Almendras Bulto",       cost: 25000,category: "Nueces",       unit: "10 kg", emoji: "📦" }
 ];
+
+const FALLBACK_PRODUCTS = rawFallbackParams.map(p => ({
+  ...p,
+  ...inferWeightAndType(p.unit, p.name)
+}));
