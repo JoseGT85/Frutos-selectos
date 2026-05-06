@@ -92,15 +92,30 @@ export default function ProductCard({ product, margin, inCart, onAdd, delay }) {
           {(product.tipo_producto === "bulto_10kg" || (product.peso_kg * inCart) >= 10) ? "Envío gratis en primer pedido" : "Envío a cargo del comprador"}
         </p>
 
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <span className="serif" style={{ fontSize: "1.5rem", fontWeight: 300, color: "#c9a84c" }}>
-            {fmt(salePrice)}
-          </span>
+        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginTop: 8 }}>
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <span className="serif" style={{ fontSize: "1.5rem", fontWeight: 300, color: "#c9a84c", lineHeight: 1 }}>
+              {fmt(calcSalePrice(product.costPerKg || (product.cost / (product.peso_kg || 1)), margin))}
+              <span style={{ fontSize: "0.85rem", fontWeight: 400, color: "#888", marginLeft: 4 }}>
+                / kg
+              </span>
+            </span>
+            {product.tipo_producto === "bulto_10kg" && (
+              <span style={{ fontSize: "0.55rem", color: "#c9a84c", marginTop: 4, letterSpacing: "0.05em" }}>
+                (Comprando bulto de {product.peso_kg || 10} kg)
+              </span>
+            )}
+            {product.tipo_producto !== "bulto_10kg" && product.peso_kg > 0 && product.peso_kg !== 1 && (
+              <span style={{ fontSize: "0.55rem", color: "#888", marginTop: 4, letterSpacing: "0.05em" }}>
+                (Presentación: {product.unit})
+              </span>
+            )}
+          </div>
           <button
             onClick={onAdd}
             className="btn-gold"
-            aria-label={`Agregar ${product.name} al carrito, ${fmt(salePrice)}`}
-            style={{ padding: "9px 16px", borderRadius: 2, display: "flex", alignItems: "center", gap: 6 }}
+            aria-label={`Agregar ${product.name} al carrito`}
+            style={{ padding: "9px 16px", borderRadius: 2, display: "flex", alignItems: "center", gap: 6, height: "fit-content" }}
           >
             <Plus size={11} aria-hidden="true" />
             {inCart > 0 ? `Agregar (${inCart})` : "Agregar"}

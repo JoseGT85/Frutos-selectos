@@ -139,41 +139,29 @@ export class ProductCatalog {
       const rows = this.#parseCSV(csvText);
 
       // Detectar estructura de columnas en la primera aparición del header
-      let nameCol = 0, presCol = 1, bultoCol = -1, kgCol = -1;
+      let nameCol = 0, presCol = 1, bultoKgCol = 3;
       let foundHeader = false;
 
       for (let i = 0; i < rows.length; i++) {
         const cells = rows[i].map(c => c.toLowerCase().trim());
-        const remitoIdx = cells.findIndex(c => c.includes("remito"));
-        if (remitoIdx > -1) {
-          // Esta fila tiene "REMITO" — buscar PRODUCTO y PRESENTACIÓN
-          nameCol = cells.findIndex(c => /producto|artículo|descripción|nombre/.test(c));
+        if (cells.some(c => c.includes("precio kg x bulto cerrado") || c.includes("precio kg x bulto"))) {
+          nameCol = cells.findIndex(c => /producto|artículo/.test(c));
+          presCol = cells.findIndex(c => /peso bulto|presentac/.test(c));
+          bultoKgCol = cells.findIndex(c => /precio kg x bulto/.test(c));
+          
           if (nameCol === -1) nameCol = 0;
-          presCol = cells.findIndex(c => /presentac/.test(c));
           if (presCol === -1) presCol = 1;
-
-          // La siguiente fila debería tener KG y BULTO como sub-columnas
-          if (i + 1 < rows.length) {
-            const subCells = rows[i + 1].map(c => c.toLowerCase().trim());
-            // Buscar BULTO que esté en la zona de REMITO (columnas cercanas a remitoIdx)
-            for (let j = remitoIdx; j < Math.min(remitoIdx + 3, subCells.length); j++) {
-              if (subCells[j].includes("bulto")) { bultoCol = j; }
-              if (subCells[j] === "kg") { kgCol = j; }
-            }
-          }
-
-          // Fallback: si no encontramos BULTO, usar la columna siguiente a REMITO
-          if (bultoCol === -1) bultoCol = remitoIdx + 1;
-          if (kgCol === -1) kgCol = remitoIdx;
-
+          if (bultoKgCol === -1) bultoKgCol = 3;
+          
           foundHeader = true;
-          console.log(`[CATALOG] Estructura detectada: nombre=col${nameCol}, presentación=col${presCol}, remito_kg=col${kgCol}, remito_bulto=col${bultoCol}`);
+          console.log(`[CATALOG] Estructura detectada: nombre=col${nameCol}, presentación=col${presCol}, precio_kg_bulto=col${bultoKgCol}`);
           break;
         }
       }
 
-      if (!foundHeader || bultoCol === -1) {
-        throw new Error("No se pudo detectar la estructura de la hoja (falta columna 'remito' con sub-columna 'bulto')");
+      // Si no encuentra el header nuevo, usar defaults por si acaso
+      if (!foundHeader) {
+        console.log("[CATALOG] ⚠️ No se detectó header exacto, usando columnas por defecto (0, 1, 3)");
       }
 
       // Parsear todas las filas de datos, saltando headers y secciones
@@ -189,17 +177,13 @@ export class ProductCatalog {
         const cell0Lower = cell0.toLowerCase();
 
         // Detectar filas de header/sub-header → saltar
-        if (cell0Lower.includes("producto") && (cells[1] || "").toLowerCase().includes("presentac")) continue;
-        // Sub-header con KG/BULTO → saltar
-        if (!cell0 || cell0.trim() === "") {
-          const c3 = (cells[3] || "").toLowerCase().trim();
-          if (c3 === "kg" || c3.includes("unidad")) continue;
-        }
+        if (cell0Lower.includes("producto") && (cells[1] || "").toLowerCase().includes("peso")) continue;
+        
+        // La columna bultoKgCol tiene el precio POR KG
+        const bultoRaw = (cells[bultoKgCol] || "").trim();
+        
         // Detectar filas de sección (solo texto en primera columna, sin precio en BULTO)
-        const bultoRaw = (cells[bultoCol] || "").trim();
         if (cell0 && !bultoRaw && cell0.length > 3) {
-          // Podría ser un título de sección (sin datos en la columna BULTO)
-          // Solo actualizar la sección si parece un título con asterisco o paréntesis
           if (/[*(]/.test(cell0) || cell0 === cell0.toUpperCase()) {
             currentSection = cell0;
           }
@@ -210,23 +194,16 @@ export class ProductCatalog {
         const name = cells[nameCol]?.trim();
         if (!name || name.length < 2) continue;
 
-        // Saltar filas descriptivas (recetas, notas, etc.)
+        // Saltar filas descriptivas
         if (/^(mix .+\(|recetas sujetas)/i.test(name) && !bultoRaw) continue;
 
-        // Parsear precio BULTO: "$ 188.629,55" → 188629.55
-        const rawBulto = bultoRaw
+        // Parsear precio POR KG
+        const rawKgCost = bultoRaw
           .replace(/[^0-9,.]/g, "")
           .replace(/\./g, "")
           .replace(",", ".");
-        const costBulto = parseFloat(rawBulto);
-        if (isNaN(costBulto) || costBulto <= 0) continue;
-
-        // Parsear precio KG como referencia
-        const rawKg = (cells[kgCol] || "").trim()
-          .replace(/[^0-9,.]/g, "")
-          .replace(/\./g, "")
-          .replace(",", ".");
-        const costKg = parseFloat(rawKg) || 0;
+        const costPerKg = parseFloat(rawKgCost);
+        if (isNaN(costPerKg) || costPerKg <= 0) continue;
 
         // Presentación como unidad
         const presentation = cells[presCol]?.trim() || "";
@@ -234,13 +211,16 @@ export class ProductCatalog {
 
         const { category, emoji, imageUrl } = inferCategory(name);
         const { peso_kg, tipo_producto } = inferWeightAndType(unit, name);
+        
+        // El costo de la unidad entera es el precio por kg multiplicado por el peso total
+        const costBulto = costPerKg * peso_kg;
 
         productId++;
         products.push({
           id: productId,
           name,
-          cost: costBulto,       // Precio REMITO BULTO (base para margen)
-          costPerKg: costKg,     // Referencia precio por kg
+          cost: costBulto,       // Precio TOTAL de la unidad (base para margen y carrito)
+          costPerKg: costPerKg,  // Referencia precio por kg
           category,
           unit,                  // Presentación (ej: "CAJA X 10 KG")
           emoji,
@@ -319,24 +299,28 @@ export class ProductCatalog {
 function inferCategory(name) {
   const n = (name || "").toLowerCase();
   
-  if (/almendr/i.test(n)) return { category: "Nueces", emoji: "🌰", imageUrl: "https://images.unsplash.com/photo-1508061253366-f7da158b6d46?w=600&q=80" };
-  if (/nuez|nueces/i.test(n)) return { category: "Nueces", emoji: "🥜", imageUrl: "https://images.unsplash.com/photo-1524593656068-fbac72624bb0?w=600&q=80" };
-  if (/pistacho/i.test(n)) return { category: "Nueces", emoji: "🫘", imageUrl: "https://images.unsplash.com/photo-1524593000379-d4729b2c4f99?w=600&q=80" };
-  if (/castaña|anacardo/i.test(n)) return { category: "Nueces", emoji: "🌿", imageUrl: "https://images.unsplash.com/photo-1726771517475-e7acdd34cd8a?w=600&q=80" };
-  if (/pecan|maní|macadam/i.test(n)) return { category: "Nueces", emoji: "🥜", imageUrl: "https://images.unsplash.com/photo-1626196340006-f89d9bedf1c6?w=600&q=80" };
-
+  if (/avena/i.test(n)) return { category: "Cereales", emoji: "🥣", imageUrl: "https://images.unsplash.com/photo-1559951585-645e730d3cf0?w=600&q=80" };
   if (/arándano/i.test(n)) return { category: "Frutas Secas", emoji: "🫐", imageUrl: "https://images.unsplash.com/photo-1642102903918-b97c37955bbf?w=600&q=80" };
-  if (/dátil/i.test(n)) return { category: "Frutas Secas", emoji: "🟤", imageUrl: "https://images.unsplash.com/photo-1691657917109-c6e027eac44a?w=600&q=80" };
-  if (/pasa/i.test(n)) return { category: "Frutas Secas", emoji: "🍇", imageUrl: "https://images.unsplash.com/photo-1621597121291-fa650ac736e5?w=600&q=80" };
+  if (/castaña.*cajú/i.test(n)) return { category: "Nueces", emoji: "🌿", imageUrl: "https://images.unsplash.com/photo-1596422846543-7dc3fa908d08?auto=format&fit=crop&q=80&w=400" };
+  if (/pistacho/i.test(n)) return { category: "Nueces", emoji: "🫘", imageUrl: "https://images.unsplash.com/photo-1524593000379-d4729b2c4f99?w=600&q=80" };
+  if (/nuez|nueces/i.test(n)) return { category: "Nueces", emoji: "🥜", imageUrl: "https://images.unsplash.com/photo-1524593656068-fbac72624bb0?w=600&q=80" };
+  if (/almendr/i.test(n)) return { category: "Nueces", emoji: "🌰", imageUrl: "https://images.unsplash.com/photo-1508061253366-f7da158b6d46?w=600&q=80" };
+  if (/avellana/i.test(n)) return { category: "Nueces", emoji: "🌰", imageUrl: "https://images.unsplash.com/photo-1560155016-bd4879ae8f21?w=600&q=80" };
+  if (/maní|mani /i.test(n)) return { category: "Nueces", emoji: "🥜", imageUrl: "https://images.unsplash.com/photo-1626196340006-f89d9bedf1c6?w=600&q=80" };
+  if (/pecan/i.test(n)) return { category: "Nueces", emoji: "🥜", imageUrl: "https://images.unsplash.com/photo-1598049025533-dbd5c11c2462?w=600&q=80" };
+
+  if (/dátil|datil/i.test(n)) return { category: "Frutas Secas", emoji: "🟤", imageUrl: "https://images.unsplash.com/photo-1691657917109-c6e027eac44a?w=600&q=80" };
+  if (/pasa.*uva/i.test(n)) return { category: "Frutas Secas", emoji: "🍇", imageUrl: "https://images.unsplash.com/photo-1621597121291-fa650ac736e5?w=600&q=80" };
   if (/coco/i.test(n)) return { category: "Frutas Secas", emoji: "🥥", imageUrl: "https://images.unsplash.com/photo-1526656755455-89ffb578c740?w=600&q=80" };
-  if (/higo|damasco|ciruela|goji/i.test(n)) return { category: "Frutas Secas", emoji: "🍑", imageUrl: "https://images.unsplash.com/photo-1629738601425-494c3d6ba3e2?w=600&q=80" };
+  if (/higo|damasco|ciruela|goji|papaya|pera/i.test(n)) return { category: "Frutas Secas", emoji: "🍑", imageUrl: "https://images.unsplash.com/photo-1629738601425-494c3d6ba3e2?w=600&q=80" };
+  if (/tomate/i.test(n)) return { category: "Otros", emoji: "🍅", imageUrl: "https://images.unsplash.com/photo-1558500201-d576a92ec23d?w=600&q=80" };
 
   if (/mix|mezcla|trail/i.test(n)) return { category: "Mezclas", emoji: "✨", imageUrl: "https://images.unsplash.com/photo-1642073537056-20608544f111?w=600&q=80" };
   
-  if (/chía|semilla/i.test(n)) return { category: "Semillas", emoji: "🌱", imageUrl: "https://images.unsplash.com/photo-1604768802835-899055f0e245?w=600&q=80" };
-  if (/girasol|lino|sésamo|zapallo/i.test(n)) return { category: "Semillas", emoji: "🌾", imageUrl: "https://images.unsplash.com/photo-1642497393633-a19e9231fb92?w=600&q=80" };
-
-  if (/granola|avena|cereal/i.test(n)) return { category: "Cereales", emoji: "🥣", imageUrl: "https://images.unsplash.com/photo-1559951585-645e730d3cf0?w=600&q=80" };
+  if (/chía|chia/i.test(n)) return { category: "Semillas", emoji: "🌱", imageUrl: "https://images.unsplash.com/photo-1604768802835-899055f0e245?w=600&q=80" };
+  if (/girasol|lino|sésamo|sesamo|zapallo/i.test(n)) return { category: "Semillas", emoji: "🌾", imageUrl: "https://images.unsplash.com/photo-1642497393633-a19e9231fb92?w=600&q=80" };
+  if (/maiz|maíz/i.test(n)) return { category: "Otros", emoji: "🌽", imageUrl: "https://images.unsplash.com/photo-1582236592237-72ce00cb3fbc?w=600&q=80" };
+  if (/chips.*banana/i.test(n)) return { category: "Frutas Secas", emoji: "🍌", imageUrl: "https://images.unsplash.com/photo-1600351792694-a15e61bf5ab9?w=600&q=80" };
 
   return { category: "Otros", emoji: "🌿", imageUrl: "https://images.unsplash.com/photo-1615485925873-7ecbbe90a866?w=600&q=80" };
 }
