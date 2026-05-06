@@ -47,6 +47,8 @@ REQUIRED.forEach(k => {
 
 const PORT       = Number(process.env.PORT || 3000);
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "*";
+const BOT_TOKEN   = process.env.TELEGRAM_BOT_TOKEN;
+const ADMIN_IDS   = (process.env.ADMIN_CHAT_IDS || "").split(",").map(id => Number(id.trim())).filter(id => !isNaN(id));
 
 // ─── Instancias ─────────────────────────────────────────────────────────────
 const bot          = new Telegraf(BOT_TOKEN);

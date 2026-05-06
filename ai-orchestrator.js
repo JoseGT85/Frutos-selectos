@@ -1,9 +1,8 @@
-// ═══════════════════════════════════════════════════════════════════════════
 //  DIFRUMARKET — AI Orchestrator v2
 //  Cascada inteligente multi-modelo con fallback, caché, detección de
 //  intención y métricas por agente.
 //
-//  Prioridad:  Claude → Grok → Mistral (HF) → Ollama local
+//  Prioridad:  Ollama (Gemma) → Mistral (HF) → Claude → Grok
 // ═══════════════════════════════════════════════════════════════════════════
 import Anthropic from "@anthropic-ai/sdk";
 import { kbService }       from "./kb-service.js";
@@ -13,31 +12,31 @@ import { responseCache }   from "./response-cache.js";
 // ─── Configuración de agentes ────────────────────────────────────────────────
 const AGENTS = [
   {
-    name:     "Claude",
-    provider: "anthropic",
-    model:    "claude-sonnet-4-20250514",
-    enabled:  () => !!process.env.ANTHROPIC_API_KEY,
+    name:     "Ollama (Gemma)",
+    provider: "ollama",
+    model:    process.env.OLLAMA_MODEL || "gemma2:9b",
+    enabled:  () => !!process.env.OLLAMA_URL,
     priority: 1,
-  },
-  {
-    name:     "Grok",
-    provider: "xai",
-    model:    "grok-3-beta",
-    enabled:  () => !!process.env.GROK_API_KEY,
-    priority: 2,
   },
   {
     name:     "Mistral",
     provider: "huggingface",
     model:    "mistralai/Mistral-7B-Instruct-v0.3",
     enabled:  () => !!process.env.HF_API_KEY,
+    priority: 2,
+  },
+  {
+    name:     "Claude",
+    provider: "anthropic",
+    model:    "claude-3-5-sonnet-20240620",
+    enabled:  () => !!process.env.ANTHROPIC_API_KEY,
     priority: 3,
   },
   {
-    name:     "Ollama",
-    provider: "ollama",
-    model:    process.env.OLLAMA_MODEL || "llama3.1:8b",
-    enabled:  () => !!process.env.OLLAMA_URL,
+    name:     "Grok",
+    provider: "xai",
+    model:    "grok-3-beta",
+    enabled:  () => !!process.env.GROK_API_KEY,
     priority: 4,
   },
 ];
