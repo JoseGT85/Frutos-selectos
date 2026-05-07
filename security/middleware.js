@@ -10,15 +10,17 @@ import path      from "path";
 const JWT_SECRET  = process.env.JWT_SECRET || "CHANGE_ME_IN_PRODUCTION_min_32_chars!!";
 const JWT_EXPIRES = "8h";
 const isVercel = !!(process.env.VERCEL || process.env.NOW_REGION);
-const LOG_DIR     = isVercel ? "/tmp/logs" : (process.env.LOG_DIR || "./logs");
+const LOG_DIR     = isVercel ? null : (process.env.LOG_DIR || "./logs");
 const BANNED_IDS  = (process.env.BANNED_USER_IDS || "")
   .split(",").map(Number).filter(Boolean);
 
-// Crear directorio de logs si no existe (en Vercel usa /tmp que sí es escribible)
-try {
-  if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true });
-} catch {
-  console.warn("[SECURITY] No se pudo crear directorio de logs:", LOG_DIR);
+// Crear directorio de logs solo si no estamos en Vercel
+if (LOG_DIR) {
+  try {
+    if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true });
+  } catch (err) {
+    console.warn("[SECURITY] No se pudo crear directorio de logs:", err.message);
+  }
 }
 
 // ─── Patrones de prompt injection ────────────────────────────────────────────
@@ -178,6 +180,10 @@ export class SecurityMiddleware {
    */
   log(entry) {
     try {
+      if (!LOG_DIR) {
+        console.log("[SECURITY]", entry);
+        return;
+      }
       const today = new Date().toISOString().slice(0, 10);
       const logFile = path.join(LOG_DIR, `audit-${today}.jsonl`);
       const line = JSON.stringify({
