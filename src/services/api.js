@@ -3,7 +3,13 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import config from '../config/index.js';
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
+// En localhost usamos la URL completa del backend; en producción usamos rutas relativas
+// para que vercel.json las reescriba al serverless function correctamente.
+const _isLocal = typeof window !== "undefined" &&
+  (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+const BACKEND_URL = _isLocal
+  ? (import.meta.env.VITE_BACKEND_URL || "http://localhost:3000")
+  : "";
 
 /**
  * Obtiene la lista unificada de productos directamente del Motor Principal
