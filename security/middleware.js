@@ -9,12 +9,17 @@ import path      from "path";
 
 const JWT_SECRET  = process.env.JWT_SECRET || "CHANGE_ME_IN_PRODUCTION_min_32_chars!!";
 const JWT_EXPIRES = "8h";
-const LOG_DIR     = process.env.LOG_DIR || "./logs";
+const isVercel = !!(process.env.VERCEL || process.env.NOW_REGION);
+const LOG_DIR     = isVercel ? "/tmp/logs" : (process.env.LOG_DIR || "./logs");
 const BANNED_IDS  = (process.env.BANNED_USER_IDS || "")
   .split(",").map(Number).filter(Boolean);
 
-// Crear directorio de logs si no existe
-if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true });
+// Crear directorio de logs si no existe (en Vercel usa /tmp que sí es escribible)
+try {
+  if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true });
+} catch {
+  console.warn("[SECURITY] No se pudo crear directorio de logs:", LOG_DIR);
+}
 
 // ─── Patrones de prompt injection ────────────────────────────────────────────
 const INJECTION_PATTERNS = [
