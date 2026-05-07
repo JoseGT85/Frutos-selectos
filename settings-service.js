@@ -15,10 +15,17 @@ import fs   from "fs";
 import path from "path";
 import { EventEmitter } from "events";
 
+const isVercel = !!(process.env.VERCEL || process.env.NOW_REGION);
 const SETTINGS_FILE = path.resolve(process.env.SETTINGS_FILE || "./data/settings.json");
 const DATA_DIR      = path.dirname(SETTINGS_FILE);
 
-if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+if (!isVercel) {
+  try {
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+  } catch (err) {
+    console.warn("[SETTINGS] No se pudo crear directorio:", err.message);
+  }
+}
 
 const DEFAULTS = {
   margin:    Number(process.env.MARGIN_PCT || 30),
@@ -75,6 +82,7 @@ class SettingsService extends EventEmitter {
   }
 
   #save() {
+    if (isVercel) return; // No persistir en Vercel
     try {
       fs.writeFileSync(SETTINGS_FILE, JSON.stringify(this.#data, null, 2), "utf-8");
     } catch (e) {

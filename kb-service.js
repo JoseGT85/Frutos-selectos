@@ -8,10 +8,17 @@ import fs   from "fs";
 import path from "path";
 import { EventEmitter } from "events";
 
+const isVercel = !!(process.env.VERCEL || process.env.NOW_REGION);
 const KB_FILE   = path.resolve(process.env.KB_FILE || "./data/kb.json");
 const DATA_DIR  = path.dirname(KB_FILE);
 
-if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+if (!isVercel) {
+  try {
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+  } catch (err) {
+    console.warn("[KB] No se pudo crear directorio:", err.message);
+  }
+}
 
 // ─── KB entry por defecto ────────────────────────────────────────────────────
 const DEFAULT_KB = [
@@ -186,6 +193,7 @@ class KBService extends EventEmitter {
   }
 
   #save() {
+    if (isVercel) return;
     try {
       fs.writeFileSync(KB_FILE, JSON.stringify(this.#entries, null, 2), "utf-8");
     } catch (e) {

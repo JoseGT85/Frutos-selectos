@@ -1,12 +1,19 @@
 import fs from "fs";
 import path from "path";
 
+const isVercel = !!(process.env.VERCEL || process.env.NOW_REGION);
 const dataDir = path.join(process.cwd(), "data");
 const clientsFile = path.join(dataDir, "clients.json");
 const ordersFile = path.join(dataDir, "orders.json");
 
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
+if (!isVercel) {
+  try {
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+  } catch (err) {
+    console.warn("[ORDERS] No se pudo crear directorio:", err.message);
+  }
 }
 
 export class OrdersService {
@@ -27,6 +34,7 @@ export class OrdersService {
   }
 
   save() {
+    if (isVercel) return;
     try {
       fs.writeFileSync(clientsFile, JSON.stringify(this.clients, null, 2));
       fs.writeFileSync(ordersFile, JSON.stringify(this.orders, null, 2));

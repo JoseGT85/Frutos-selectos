@@ -59,7 +59,7 @@ const security     = new SecurityMiddleware();
 const waService    = new WhatsAppService();
 
 // Exportamos para el entry de Vercel (ahora que están inicializados)
-export { app, bot };
+// Se movió al final del archivo para asegurar la inicialización de 'app'
 
 // Si el admin cambia el margen via API, el catálogo lo refleja en tiempo real
 settings.on("marginChanged", m => catalog.setMargin(m));
@@ -560,3 +560,5 @@ const shutdown = signal => {
 };
 process.once("SIGINT",  () => shutdown("SIGINT"));
 process.once("SIGTERM", () => shutdown("SIGTERM"));
+
+export { app, bot };
