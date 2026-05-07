@@ -35,13 +35,14 @@ import waRoutes, { setWhatsAppRefs, getWhatsAppStats }    from "./routes/whatsap
 import ordersRoutes               from "./routes/orders.js";
 
 dotenv.config();
+const isVercel = !!(process.env.VERCEL || process.env.NOW_REGION);
 
 // ─── Validación de env requeridas ───────────────────────────────────────────
 const REQUIRED = ["TELEGRAM_BOT_TOKEN", "ADMIN_CHAT_IDS"];
 REQUIRED.forEach(k => {
   if (!process.env[k]) {
     console.error(`❌ Falta variable de entorno: ${k}`);
-    process.exit(1);
+    if (!isVercel) process.exit(1);
   }
 });
 
@@ -522,8 +523,6 @@ app.use((err, req, res, next) => {
 // ═══════════════════════════════════════════════════════════════════════════
 // ARRANQUE — Solo si no estamos en Vercel
 // ═══════════════════════════════════════════════════════════════════════════
-const isVercel = process.env.VERCEL === '1' || !!process.env.NOW_REGION;
-
 if (!isVercel) {
   const server = app.listen(PORT, () => {
     console.log(`\n🚀 DIFRUMARKET Backend corriendo en puerto ${PORT}`);

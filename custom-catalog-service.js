@@ -5,6 +5,7 @@
 import fs from "fs/promises";
 import path from "path";
 
+const isVercel = !!(process.env.VERCEL || process.env.NOW_REGION);
 const DATA_FILE = path.join(process.cwd(), "data", "custom_catalog.json");
 
 export class CustomCatalogService {
@@ -19,6 +20,7 @@ export class CustomCatalogService {
    * Carga el estado desde el disco al inicializarse
    */
   async init() {
+    if (isVercel) return; // No intentar leer disco en Vercel
     try {
       await fs.mkdir(path.dirname(DATA_FILE), { recursive: true });
       const data = await fs.readFile(DATA_FILE, "utf-8");
@@ -30,11 +32,11 @@ export class CustomCatalogService {
       if (err.code !== "ENOENT") {
         console.error("[CUSTOM CATALOG] Error de lectura:", err.message);
       }
-      // Si no existe, se mantiene el estado vacío y se guardará al primer cambio
     }
   }
 
   async #save() {
+    if (isVercel) return; // No persistir en Vercel
     try {
       await fs.mkdir(path.dirname(DATA_FILE), { recursive: true });
       await fs.writeFile(DATA_FILE, JSON.stringify(this.#state, null, 2), "utf-8");
