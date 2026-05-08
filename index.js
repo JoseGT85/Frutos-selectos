@@ -482,6 +482,16 @@ app.use("/uploads", express.static(path.join(process.cwd(), "public", "uploads")
 // Rate limit global: 200 req/min
 app.use(rateLimit({ windowMs: 60_000, max: 200, standardHeaders: true, legacyHeaders: false }));
 
+// Rate limit estricto para pedidos: 3 pedidos cada 15 minutos por IP
+const orderLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, 
+  max: 3, 
+  message: { error: "Demasiados pedidos desde esta conexión. Por favor esperá 15 minutos." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use("/api/orders", orderLimiter);
+
 // ── Rutas ────────────────────────────────────────────────────────────────────
 app.get("/health", (_, res) => res.json({
   status:    "ok",

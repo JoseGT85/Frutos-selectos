@@ -7,6 +7,7 @@
 import fs   from "fs";
 import path from "path";
 import { EventEmitter } from "events";
+import { db, supabase } from "./supabase.js";
 
 const isVercel = !!(process.env.VERCEL || process.env.NOW_REGION);
 const KB_FILE   = path.resolve(process.env.KB_FILE || "./data/kb.json");
@@ -59,7 +60,13 @@ class KBService extends EventEmitter {
 
   constructor() {
     super();
-    this.#entries = this.#load();
+    this.#entries = [];
+    this.init();
+  }
+
+  async init() {
+    this.#entries = await this.#load();
+    this.emit("updated", this.#entries);
   }
 
   // ─── CRUD ──────────────────────────────────────────────────────────────────
@@ -176,28 +183,56 @@ class KBService extends EventEmitter {
     };
   }
 
-  // ─── I/O disco ──────────────────────────────────────────────────────────
-  #load() {
+  // ─── I/O disco y nube ──────────────────────────────────────────────────
+  async #load() {
+    // Intentar cargar desde Supabase primero
+    if (supabase) {
+      try {
+        const { data, error } = await supabase.from('knowledge_base').select('*');
+        if (!error && data && data.length > 0) {
+          console.log(`[KB] ☁️ Cargadas ${data.length} entradas desde Supabase.`);
+          return data;
+        }
+      } catch (e) {
+        console.warn("[KB] Error cargando desde Supabase, reintentando local:", e.message);
+      }
+    }
+
     try {
       if (fs.existsSync(KB_FILE)) {
         const data = JSON.parse(fs.readFileSync(KB_FILE, "utf-8"));
         if (Array.isArray(data) && data.length > 0) return data;
       }
     } catch (e) {
-      console.warn("[KB] Error leyendo KB, usando defaults:", e.message);
+      console.warn("[KB] Error leyendo KB local, usando defaults:", e.message);
     }
-    // Guardar defaults en disco
-    this.#entries = [...DEFAULT_KB];
-    this.#save();
-    return this.#entries;
+    
+    // Si no hay nada, usar defaults
+    return [...DEFAULT_KB];
   }
 
-  #save() {
-    if (isVercel) return;
-    try {
-      fs.writeFileSync(KB_FILE, JSON.stringify(this.#entries, null, 2), "utf-8");
-    } catch (e) {
-      console.error("[KB] Error guardando KB:", e.message);
+  async #save() {
+    // Persistencia local (si no es Vercel)
+    if (!isVercel) {
+      try {
+        fs.writeFileSync(KB_FILE, JSON.stringify(this.#entries, null, 2), "utf-8");
+      } catch (e) {
+        console.error("[KB] Error guardando KB local:", e.message);
+      }
+    }
+
+    // Persistencia en Nube (Supabase)
+    if (supabase) {
+      try {
+        // En un caso ideal haríamos upsert, pero por simplicidad de la estructura
+        // borramos y reinsertamos todo o manejamos upsert por ID.
+        // Usamos upsert por ID que es lo más seguro.
+        const { error } = await supabase.from('knowledge_base').upsert(this.#entries);
+        if (error) console.error("[KB] Error sincronizando con Supabase:", error.message);
+        else console.log("[KB] ☁️ Sincronizado con Supabase.");
+      } catch (e) {
+        console.error("[KB] Falló persistencia en nube:", e.message);
+      }
     }
   }
 }

@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { db } from "./supabase.js";
 
 const isVercel = !!(process.env.VERCEL || process.env.NOW_REGION);
 const dataDir = path.join(process.cwd(), "data");
@@ -108,6 +109,9 @@ export class OrdersService {
 
     this.orders.push(order);
     this.save();
+    
+    // Persistencia en Nube (Supabase)
+    db.saveOrder(order).catch(err => console.error("❌ Falló persistencia en Supabase:", err));
 
     return order;
   }

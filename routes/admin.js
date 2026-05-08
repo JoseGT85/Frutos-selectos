@@ -7,6 +7,7 @@ import { Router }             from "express";
 import fs                     from "fs";
 import path                   from "path";
 import multer                 from "multer";
+import { db }                 from "../supabase.js";
 import { SecurityMiddleware } from "../security/middleware.js";
 import { kbService }          from "../kb-service.js";
 import { settings }           from "../settings-service.js";
@@ -136,31 +137,33 @@ router.use(security.requireAdmin());
 
 // ── CATÁLOGO HÍBRIDO (Custom y Overrides) ───────────────────────────────────
 
-// Configuración de Multer para almacenar fotos físicas
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    try {
-      const uploadPath = path.join(process.cwd(), "public", "uploads");
-      if (!fs.existsSync(uploadPath)) {
-        fs.mkdirSync(uploadPath, { recursive: true });
-      }
-      cb(null, uploadPath);
-    } catch (err) {
-      console.error("> Error Multer Mkdir:", err);
-      cb(err);
-    }
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const ext = path.extname(file.originalname);
-    cb(null, "product" + '-' + uniqueSuffix + ext);
-  }
+// Configuración de Multer — Usamos memoria para poder subir a Supabase sin tocar disco
+const storage = multer.memoryStorage();
+const upload = multer({ 
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 } // Máximo 5MB
 });
-const upload = multer({ storage });
 
-router.post("/catalog/upload", upload.single("image"), (req, res) => {
+router.post("/catalog/upload", upload.single("image"), async (req, res) => {
   if (!req.file) return res.status(400).json({ ok: false, error: "No se encontró el archivo" });
-  res.json({ ok: true, imageUrl: `/uploads/${req.file.filename}` });
+  
+  try {
+    const file = req.file.buffer;
+    const ext = path.extname(req.file.originalname);
+    const fileName = `product-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+    
+    const { url, error } = await db.uploadImage(file, fileName);
+    
+    if (error) {
+      console.error("[UPLOAD] Error Supabase:", error);
+      return res.status(500).json({ ok: false, error: "Error subiendo a la nube" });
+    }
+
+    res.json({ ok: true, imageUrl: url });
+  } catch (err) {
+    console.error("[UPLOAD] Exception:", err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
 });
 
 router.put("/catalog/image", async (req, res) => {
