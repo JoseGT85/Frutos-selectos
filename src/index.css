@@ -208,6 +208,19 @@ a:focus:not(:focus-visible) {
 .toast.out {
   animation: toastOut 0.25s ease both;
 }
+.toast.toast-success {
+  border-color: rgba(106, 204, 106, 0.3);
+  border-left: 3px solid #6acc6a;
+}
+.toast.toast-error {
+  border-color: rgba(204, 85, 85, 0.3);
+  border-left: 3px solid #cc5555;
+  color: #f0d0d0;
+}
+.toast.toast-info {
+  border-color: rgba(201, 168, 76, 0.3);
+  border-left: 3px solid #c9a84c;
+}
 
 /* ─── Cart badge bounce ──────────────────────────────────────────────────── */
 @keyframes badgeBounce {

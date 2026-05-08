@@ -1,7 +1,8 @@
 import { ShoppingCart } from "lucide-react";
 import { useState, useRef } from "react";
 
-export default function Header({ view, setView, cartCount, onOpenCart, onUnlockAdmin }) {
+export default function Header({ view, setView, cartCount, cartTotal, syncStatus, onOpenCart, onUnlockAdmin }) {
+  const fmtShort = (n) => n >= 1000000 ? `$${(n/1000000).toFixed(1)}M` : n >= 1000 ? `$${(n/1000).toFixed(0)}k` : `$${n}`;
   const [clicks, setClicks] = useState(0);
   const clickTimeout = useRef(null);
 
@@ -51,8 +52,15 @@ export default function Header({ view, setView, cartCount, onOpenCart, onUnlockA
           <p style={{
             fontSize: "0.55rem", letterSpacing: "0.38em",
             color: "#555", textTransform: "uppercase", marginTop: 2,
+            display: "flex", alignItems: "center", gap: 6,
           }}>
             Calidad Premium · Mendoza
+            <span style={{
+              width: 4, height: 4, borderRadius: "50%", flexShrink: 0,
+              background: syncStatus === "ok" ? "#4a9a4a" : syncStatus === "err" ? "#cc5555" : "#555",
+              boxShadow: syncStatus === "ok" ? "0 0 6px rgba(74,154,74,0.5)" : "none",
+              transition: "background 0.3s, box-shadow 0.3s",
+            }} title={syncStatus === "ok" ? "Conectado" : syncStatus === "err" ? "Error de conexión" : "Conectando..."} />
           </p>
         </div>
 
@@ -91,6 +99,9 @@ export default function Header({ view, setView, cartCount, onOpenCart, onUnlockA
             }}
           >
             <ShoppingCart size={15} aria-hidden="true" />
+            {cartCount > 0 && cartTotal > 0 && (
+              <span style={{ fontSize: "0.58rem", color: "#c9a84c", fontWeight: 400, letterSpacing: "0.04em" }}>{fmtShort(cartTotal)}</span>
+            )}
             {cartCount > 0 && (
               <span
                 className="badge-bounce"

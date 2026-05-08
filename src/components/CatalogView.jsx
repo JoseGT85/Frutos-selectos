@@ -45,21 +45,56 @@ export default function CatalogView({ products, margin, loaded, addToCart, cart 
       </div>
 
       {/* Filters */}
-      <div className="anim" style={{display:"flex",gap:14,marginBottom:36,flexWrap:"wrap",alignItems:"center"}}>
-        <div style={{position:"relative",flex:"1 1 260px"}}>
-          <input className="si" type="text" placeholder="Buscar producto…" value={search} onChange={e=>setSearch(e.target.value)} style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.06)",borderRadius:2,color:"#e8e0d0",fontFamily:"Jost,sans-serif",fontSize:"0.78rem",padding:"9px 14px",outline:"none",width:"100%"}}/>
+      <div className="anim" style={{ marginBottom: 36 }}>
+        {/* Search */}
+        <div style={{ position: "relative", marginBottom: 18, maxWidth: 420 }}>
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#555" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}>
+            <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <input className="si" type="text" placeholder="Buscar nueces, frutas, mezclas…" value={search} onChange={e=>setSearch(e.target.value)} style={{ background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.06)", borderRadius:3, color:"#e8e0d0", fontFamily:"Jost,sans-serif", fontSize:"0.78rem", padding:"11px 14px 11px 38px", outline:"none", width:"100%", transition: "border-color 0.2s" }} onFocus={e => e.target.style.borderColor = "rgba(201,168,76,0.3)"} onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.06)"} />
+          {search && (
+            <button onClick={() => setSearch("")} aria-label="Limpiar búsqueda" style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "rgba(255,255,255,0.06)", border: "none", color: "#888", cursor: "pointer", width: 20, height: 20, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.7rem", transition: "color 0.2s" }} onMouseEnter={e => e.currentTarget.style.color = "#c9a84c"} onMouseLeave={e => e.currentTarget.style.color = "#888"}>✕</button>
+          )}
         </div>
-        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-          {cats.map(c=>(
-            <button key={c} onClick={()=>setCat(c)} style={{padding:"6px 14px",borderRadius:20,cursor:"pointer",border:`1px solid ${cat===c?"#c9a84c":"rgba(255,255,255,0.06)"}`,background:cat===c?"rgba(201,168,76,0.1)":"none",color:cat===c?"#c9a84c":"#555",fontSize:"0.62rem",letterSpacing:"0.12em",fontFamily:"Jost,sans-serif",textTransform:"uppercase",transition:"all 0.18s"}}>{c}</button>
-          ))}
+
+        {/* Category + Type filters */}
+        <div style={{ display: "flex", gap: 24, flexWrap: "wrap", alignItems: "flex-start" }}>
+          {/* Categoría */}
+          <div>
+            <p style={{ fontSize: "0.48rem", letterSpacing: "0.3em", color: "#444", textTransform: "uppercase", marginBottom: 8, fontWeight: 500 }}>Categoría</p>
+            <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+              {cats.map(c => (
+                <button key={c} onClick={() => setCat(c)} style={{ padding: "6px 14px", borderRadius: 20, cursor: "pointer", border: `1px solid ${cat === c ? "#c9a84c" : "rgba(255,255,255,0.06)"}`, background: cat === c ? "rgba(201,168,76,0.1)" : "none", color: cat === c ? "#c9a84c" : "#555", fontSize: "0.62rem", letterSpacing: "0.1em", fontFamily: "Jost,sans-serif", textTransform: "uppercase", transition: "all 0.18s", display: "flex", alignItems: "center", gap: 5 }}>
+                  {cat === c && <span style={{ width: 4, height: 4, borderRadius: "50%", background: "#c9a84c", flexShrink: 0 }} />}
+                  {c}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Separador vertical */}
+          <div style={{ width: 1, height: 48, background: "rgba(255,255,255,0.06)", alignSelf: "center" }} />
+
+          {/* Presentación */}
+          <div>
+            <p style={{ fontSize: "0.48rem", letterSpacing: "0.3em", color: "#444", textTransform: "uppercase", marginBottom: 8, fontWeight: 500 }}>Presentación</p>
+            <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+              {["Todos", "Bultos (10 kg)", "Fraccionados"].map(c => (
+                <button key={c} onClick={() => setTipoFiltro(c)} style={{ padding: "6px 14px", borderRadius: 20, cursor: "pointer", border: `1px solid ${tipoFiltro === c ? "#6acc6a" : "rgba(255,255,255,0.06)"}`, background: tipoFiltro === c ? "rgba(100,204,106,0.08)" : "none", color: tipoFiltro === c ? "#6acc6a" : "#555", fontSize: "0.62rem", letterSpacing: "0.1em", fontFamily: "Jost,sans-serif", textTransform: "uppercase", transition: "all 0.18s", display: "flex", alignItems: "center", gap: 5 }}>
+                  {tipoFiltro === c && <span style={{ width: 4, height: 4, borderRadius: "50%", background: "#6acc6a", flexShrink: 0 }} />}
+                  {c}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
-        <div style={{width:1,height:24,background:"rgba(255,255,255,0.1)",margin:"0 4px"}}/>
-        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-          {["Todos", "Bultos (10 kg)", "Fraccionados"].map(c=>(
-            <button key={c} onClick={()=>setTipoFiltro(c)} style={{padding:"6px 14px",borderRadius:20,cursor:"pointer",border:`1px solid ${tipoFiltro===c?"#6acc6a":"rgba(255,255,255,0.06)"}`,background:tipoFiltro===c?"rgba(100,204,106,0.1)":"none",color:tipoFiltro===c?"#6acc6a":"#555",fontSize:"0.62rem",letterSpacing:"0.12em",fontFamily:"Jost,sans-serif",textTransform:"uppercase",transition:"all 0.18s"}}>{c}</button>
-          ))}
-        </div>
+
+        {/* Result count */}
+        <p style={{ fontSize: "0.52rem", color: "#3a3530", letterSpacing: "0.1em", marginTop: 16 }}>
+          {shown.length === products.length 
+            ? `Mostrando ${products.length} productos` 
+            : `Mostrando ${shown.length} de ${products.length} productos`}
+        </p>
       </div>
 
       {/* Product Grid */}

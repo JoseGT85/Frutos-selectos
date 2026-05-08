@@ -60,17 +60,15 @@ export class OrdersService {
     return !hasPast;
   }
 
-  processOrder(clientData, cartData, totalKg) {
+  processOrder(clientData, cartData, totalKg, cartTotal = 0) {
     const isFirst = this.isFirstOrder(clientData.phone, clientData.cuit);
     let shippingStatus = "Envío a cargo del cliente";
     
-    if (totalKg >= 10 && isFirst) {
-      shippingStatus = "Envío gratis aprobado (1ra compra >= 10kg)";
-    } else if (totalKg >= 10) {
+    if (totalKg >= 10 && cartTotal >= 400000 && isFirst) {
+      shippingStatus = "Envío gratis aprobado (1ra compra >= 10kg y >= $400.000)";
+    } else if (totalKg >= 10 && cartTotal >= 400000) {
       shippingStatus = "Envío a cargo del cliente (No es primer compra)";
     }
-
-    // Save client info / Update
     const existingClientIndex = this.clients.findIndex(c => {
       const phoneStr1 = (c.phone || "").replace(/\D/g, "");
       const phoneStr2 = (clientData.phone || "").replace(/\D/g, "");

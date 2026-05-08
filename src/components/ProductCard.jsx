@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Truck } from "lucide-react";
+import { Plus } from "lucide-react";
 import { calcSalePrice, fmt } from "../utils/pricing.js";
 
 export default function ProductCard({ product, margin, inCart, onAdd, delay }) {
@@ -12,6 +12,11 @@ export default function ProductCard({ product, margin, inCart, onAdd, delay }) {
   }[product.category] || "linear-gradient(135deg, #111 0%, #080808 100%)";
 
   const [imgError, setImgError] = useState(false);
+
+  const productWeight = product.tipo_producto === "bulto_10kg" ? 10 * inCart : (product.peso_kg || 0) * inCart;
+  const productTotal = salePrice * inCart;
+  // Envío gratis solo depende del monto ($400.000). Los 10 kg son compra mínima, no condición de envío.
+  const qualifiesFreeShipping = productTotal >= 400000;
 
   return (
     <article
@@ -73,54 +78,72 @@ export default function ProductCard({ product, margin, inCart, onAdd, delay }) {
       </div>
 
       {/* Info */}
-      <div style={{ padding: "20px 22px 24px" }}>
+      <div style={{ padding: "20px 22px 22px" }}>
         <h3 className="serif" style={{
-          fontSize: "1.12rem", fontWeight: 400,
-          color: "#e0d8c8", marginBottom: 5,
+          fontSize: "1.15rem", fontWeight: 400,
+          color: "#e0d8c8", marginBottom: 4, lineHeight: 1.2,
         }}>
           {product.name}
         </h3>
-        <p style={{ fontSize: "0.62rem", color: "#4a4540", letterSpacing: "0.18em", marginBottom: 18 }}>
+        <p style={{ fontSize: "0.6rem", color: "#4a4540", letterSpacing: "0.15em", marginBottom: 14, display: "flex", alignItems: "center", gap: 6 }}>
           {product.unit}
-        </p>
-        <p style={{
-          fontSize: "0.52rem", 
-          color: (product.tipo_producto === "bulto_10kg" || (product.peso_kg * inCart) >= 10) ? "#6acc6a" : "#888", 
-          marginBottom: 16, display: "flex", alignItems: "center", gap: 4
-        }}>
-          <Truck size={10}/> 
-          {(product.tipo_producto === "bulto_10kg" || (product.peso_kg * inCart) >= 10) ? "Envío gratis en primer pedido" : "Envío a cargo del comprador"}
+          {product.tipo_producto === "bulto_10kg" && (
+            <span style={{ fontSize: "0.5rem", background: "rgba(201,168,76,0.08)", color: "#c9a84c", padding: "1px 6px", borderRadius: 8, letterSpacing: "0.08em" }}>BULTO</span>
+          )}
         </p>
 
-        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginTop: 8 }}>
-          <div style={{ display: "flex", flexDirection: "column" }}>
-            <span className="serif" style={{ fontSize: "1.5rem", fontWeight: 300, color: "#c9a84c", lineHeight: 1 }}>
+        {/* Zona de precio — glass aislada */}
+        <div style={{
+          background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.04)",
+          borderRadius: 4, padding: "12px 14px", marginBottom: 14,
+        }}>
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
+            <span className="serif" style={{ fontSize: "1.45rem", fontWeight: 300, color: "#c9a84c", lineHeight: 1 }}>
               {fmt(calcSalePrice(product.costPerKg || (product.cost / (product.peso_kg || 1)), margin))}
-              <span style={{ fontSize: "0.85rem", fontWeight: 400, color: "#888", marginLeft: 4 }}>
-                / kg
-              </span>
+              <span style={{ fontSize: "0.78rem", fontWeight: 400, color: "#666", marginLeft: 3 }}>/ kg</span>
             </span>
             {product.tipo_producto === "bulto_10kg" && (
-              <span style={{ fontSize: "0.55rem", color: "#c9a84c", marginTop: 4, letterSpacing: "0.05em" }}>
-                (Comprando bulto de {product.peso_kg || 10} kg)
-              </span>
-            )}
-            {product.tipo_producto !== "bulto_10kg" && product.peso_kg > 0 && product.peso_kg !== 1 && (
-              <span style={{ fontSize: "0.55rem", color: "#888", marginTop: 4, letterSpacing: "0.05em" }}>
-                (Presentación: {product.unit})
+              <span style={{ fontSize: "0.5rem", color: "#888", letterSpacing: "0.04em" }}>
+                Bulto {product.peso_kg || 10} kg
               </span>
             )}
           </div>
-          <button
-            onClick={onAdd}
-            className="btn-gold"
-            aria-label={`Agregar ${product.name} al carrito`}
-            style={{ padding: "9px 16px", borderRadius: 2, display: "flex", alignItems: "center", gap: 6, height: "fit-content" }}
-          >
-            <Plus size={11} aria-hidden="true" />
-            {inCart > 0 ? `Agregar (${inCart})` : "Agregar"}
-          </button>
+          {product.tipo_producto !== "bulto_10kg" && product.peso_kg > 0 && product.peso_kg !== 1 && (
+            <span style={{ fontSize: "0.5rem", color: "#555", marginTop: 4, display: "block", letterSpacing: "0.04em" }}>
+              Presentación: {product.unit}
+            </span>
+          )}
         </div>
+
+        {/* Indicador de envío */}
+        <p style={{
+          fontSize: "0.52rem", 
+          color: qualifiesFreeShipping ? "#6acc6a" : "#666", 
+          marginBottom: 14, display: "flex", alignItems: "center", gap: 5,
+          letterSpacing: "0.06em",
+        }}>
+          <span style={{
+            width: 5, height: 5, borderRadius: "50%", flexShrink: 0,
+            background: qualifiesFreeShipping ? "#6acc6a" : "#444",
+            boxShadow: qualifiesFreeShipping ? "0 0 6px rgba(106,204,106,0.4)" : "none",
+          }} />
+          {qualifiesFreeShipping ? "Envío gratis en tu 1° compra" : "Envío a cargo del comprador"}
+        </p>
+
+        {/* Botón full-width */}
+        <button
+          onClick={onAdd}
+          className="btn-gold"
+          aria-label={`Agregar ${product.name} al carrito`}
+          style={{
+            width: "100%", padding: "10px 16px", borderRadius: 2,
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
+            background: inCart > 0 ? "linear-gradient(135deg, #c9a84c, #dbbe6a)" : "#c9a84c",
+          }}
+        >
+          <Plus size={12} aria-hidden="true" />
+          {inCart > 0 ? `Agregar otra (${inCart} en carrito)` : "Agregar al carrito"}
+        </button>
       </div>
     </article>
   );

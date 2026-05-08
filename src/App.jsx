@@ -57,7 +57,7 @@ export default function App() {
       setView("admin");
       setAdminUser("");
       setAdminPass("");
-      showToast("🔐 Acceso Administrador Autorizado");
+      showToast("🔐 Acceso Administrador Autorizado", "success");
     } catch (err) {
       setLoginError(err.message || "Credenciales incorrectas");
     }
@@ -67,9 +67,9 @@ export default function App() {
   const [toast, setToast]       = useState(null);
   const toastTimer = useRef(null);
 
-  const showToast = useCallback((message, duration = 2500) => {
+  const showToast = useCallback((message, type = "info", duration = 2500) => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
-    setToast({ message, visible: true });
+    setToast({ message, type, visible: true });
     toastTimer.current = setTimeout(() => {
       setToast(prev => prev ? { ...prev, visible: false } : null);
       setTimeout(() => setToast(null), 300);
@@ -104,7 +104,7 @@ export default function App() {
       if (found) return prev.map((i) => i.id === product.id ? { ...i, qty: i.qty + 1 } : i);
       return [...prev, { ...product, qty: 1 }];
     });
-    showToast(`🌰 ${product.name} agregado al carrito`);
+    showToast(`🌰 ${product.name} agregado al carrito`, "success");
   }, [showToast]);
 
   const updateQty = useCallback((id, delta) => {
@@ -120,7 +120,7 @@ export default function App() {
 
   const clearCart = useCallback(() => {
     setCart([]);
-    showToast("Carrito vaciado");
+    showToast("Carrito vaciado", "error");
   }, [showToast]);
 
   const cartTotal = cart.reduce(
@@ -148,18 +148,35 @@ export default function App() {
       timestamp: new Date().toISOString(),
     });
 
-    showToast("¡Pedido enviado por WhatsApp! 🎉");
+    showToast("¡Pedido enviado por WhatsApp! 🎉", "success");
   };
 
   // ── Render ──────────────────────────────────────────────────────────────
   return (
     <>
-      <div style={{background:"#c9a84c",color:"#060606",textAlign:"center",padding:"8px",fontSize:"0.62rem",letterSpacing:"0.12em",fontWeight:600,textTransform:"uppercase"}}>📦 Envío gratis en tu primer pedido desde 10 kg (podés combinar productos)</div>
+      <div style={{
+        background: (cartCount > 0 && cartTotal >= 400000) 
+          ? "linear-gradient(90deg, #1a3a1a, #0d2a0d)" 
+          : "linear-gradient(90deg, #2a2010, #1a1508)",
+        color: (cartCount > 0 && cartTotal >= 400000) 
+          ? "#6acc6a" : "#c9a84c",
+        textAlign: "center", padding: "9px 16px", fontSize: "0.58rem", 
+        letterSpacing: "0.1em", fontWeight: 500,
+        borderBottom: "1px solid rgba(255,255,255,0.03)",
+        transition: "background 0.5s, color 0.4s",
+        overflow: "hidden", whiteSpace: "nowrap",
+      }}>
+        {cartCount > 0 && cartTotal >= 400000 
+          ? "✓ ¡Calificás para Envío Gratis en tu primera compra!" 
+          : "📦 Compra mínima 10 kg  ·  🚚 Envío gratis en tu 1° compra > $400.000"}
+      </div>
       <div style={{ minHeight: "100vh", background: "#070707" }}>
         <Header
         view={view}
         setView={setView}
         cartCount={cartCount}
+        cartTotal={cartTotal}
+        syncStatus={syncStatus}
         onOpenCart={() => setCartOpen(true)}
         onUnlockAdmin={() => {
           if (view !== "admin") setShowLogin(true);
@@ -269,7 +286,7 @@ export default function App() {
       {/* Toast Notification */}
       {toast && (
         <div
-          className={`toast${toast.visible ? "" : " out"}`}
+          className={`toast${toast.visible ? "" : " out"} toast-${toast.type || "info"}`}
           role="status"
           aria-live="polite"
         >

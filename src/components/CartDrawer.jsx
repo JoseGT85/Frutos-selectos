@@ -44,11 +44,13 @@ export default function CartDrawer({ cart, margin, cartTotal, cartCount, updateQ
     }
     setSubmitting(true);
     try {
-      // Ajusta la URL al puerto de Node.js, ya que Vite lo sirve en 5174 localmente
-      const res = await fetch(`http://localhost:3000/api/orders`, {
+      // URL dinámica: en local usa VITE_BACKEND_URL, en producción usa ruta relativa
+      const _isLocal = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+      const BACKEND_URL = _isLocal ? (import.meta.env.VITE_BACKEND_URL || "http://localhost:3000") : "";
+      const res = await fetch(`${BACKEND_URL}/api/orders`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ clientData: formData, cartData: cart, totalKg })
+        body: JSON.stringify({ clientData: formData, cartData: cart, totalKg, cartTotal })
       });
       if (!res.ok) throw new Error("Error del servidor al validar orden");
       const data = await res.json();
@@ -145,28 +147,88 @@ export default function CartDrawer({ cart, margin, cartTotal, cartCount, updateQ
           )}
         </div>
 
-        <div style={{ padding: "22px 28px", borderTop: "1px solid rgba(255,255,255,0.055)", background:(totalKg>=10 && !checkoutStep)?"rgba(100,200,100,0.03)":"transparent" }}>
-          {!checkoutStep && (
-            <div style={{marginBottom:16}}>
-              {totalKg >= 10 ? (
-                <p style={{fontSize:"0.6rem",color:"#6acc6a",display:"flex",alignItems:"center",gap:6}}><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg> Este pedido califica para <b>Validación de Envío Gratis</b>.</p>
-              ) : (
-                <p style={{fontSize:"0.6rem",color:"#888",display:"flex",alignItems:"center",gap:6}}><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg> Te faltan {(10 - totalKg).toFixed(2)} kg para acceder a envío gratis en tu primer pedido.</p>
-              )}
+        <div style={{ padding: "22px 28px", borderTop: "1px solid rgba(255,255,255,0.055)", background:(totalKg>=10 && cartTotal>=400000 && !checkoutStep)?"rgba(100,200,100,0.03)":"transparent" }}>
+          {!checkoutStep && cart.length > 0 && (
+            <div style={{
+              marginBottom: 18, padding: "16px 18px",
+              background: "rgba(255,255,255,0.015)", border: "1px solid rgba(255,255,255,0.04)",
+              borderRadius: 4,
+            }}>
+              {/* Compra Mínima */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#c9a84c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>
+                <span style={{ fontSize: "0.56rem", letterSpacing: "0.22em", color: "#777", textTransform: "uppercase" }}>Requisitos del Pedido</span>
+              </div>
+
+              {/* Progress bar — Compra Mínima (Peso) */}
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
+                  <span style={{ fontSize: "0.54rem", color: totalKg >= 10 ? "#6acc6a" : "#c9a84c", letterSpacing: "0.08em", fontWeight: 500 }}>
+                    {totalKg >= 10 ? "✓ Mínimo alcanzado" : `Faltan ${(10 - totalKg).toFixed(1)} kg para el mínimo`}
+                  </span>
+                  <span style={{ fontSize: "0.54rem", color: "#555" }}>Mín. 10 kg</span>
+                </div>
+                <div style={{ height: 3, background: "rgba(255,255,255,0.04)", borderRadius: 2, overflow: "hidden" }}>
+                  <div style={{
+                    height: "100%", borderRadius: 2,
+                    width: `${Math.min(100, (totalKg / 10) * 100)}%`,
+                    background: totalKg >= 10 ? "linear-gradient(90deg, #4a9a4a, #6acc6a)" : "linear-gradient(90deg, #8a7335, #c9a84c)",
+                    transition: "width 0.5s cubic-bezier(0.4,0,0.2,1)",
+                  }} />
+                </div>
+              </div>
+
+              {/* Progress bar — Envío Gratis (Solo 1° Compra) */}
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
+                  <span style={{ fontSize: "0.54rem", color: cartTotal >= 400000 ? "#6acc6a" : "#888", letterSpacing: "0.08em" }}>
+                    {cartTotal >= 400000 ? "✓ Envío Gratis (1° compra)" : `Faltan ${fmt(400000 - cartTotal)} para envío gratis`}
+                  </span>
+                  <span style={{ fontSize: "0.54rem", color: "#555" }}>{fmt(400000)}</span>
+                </div>
+                <div style={{ height: 3, background: "rgba(255,255,255,0.04)", borderRadius: 2, overflow: "hidden" }}>
+                  <div style={{
+                    height: "100%", borderRadius: 2,
+                    width: `${Math.min(100, (cartTotal / 400000) * 100)}%`,
+                    background: cartTotal >= 400000 ? "linear-gradient(90deg, #4a9a4a, #6acc6a)" : "rgba(255,255,255,0.1)",
+                    transition: "width 0.5s cubic-bezier(0.4,0,0.2,1)",
+                  }} />
+                </div>
+              </div>
             </div>
           )}
 
+          {/* Resumen de totales */}
           <div style={{ marginBottom: 20 }}>
+            {!checkoutStep && cart.length > 0 && (
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <span style={{ fontSize: "0.56rem", color: "#555", letterSpacing: "0.06em" }}>Peso total</span>
+                <span style={{ fontSize: "0.56rem", color: "#888", letterSpacing: "0.04em", borderBottom: "1px dotted rgba(255,255,255,0.06)", flex: 1, margin: "0 10px" }}></span>
+                <span style={{ fontSize: "0.7rem", color: "#aaa" }}>{totalKg.toFixed(2)} kg</span>
+              </div>
+            )}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
               <span style={{ fontSize: "0.62rem", letterSpacing: "0.28em", color: "#555", textTransform: "uppercase" }}>Total estimado</span>
+              <span style={{ borderBottom: "1px dotted rgba(255,255,255,0.06)", flex: 1, margin: "0 10px" }}></span>
               <span className="serif" style={{ fontSize: "2rem", fontWeight: 300, color: "#c9a84c" }} aria-live="polite">{fmt(cartTotal)}</span>
             </div>
             <div style={{ height: 1, background: "linear-gradient(90deg, transparent, rgba(201,168,76,0.2), transparent)" }} />
           </div>
 
           {!checkoutStep ? (
-            <button onClick={()=>setCheckoutStep(true)} disabled={cart.length === 0} className="btn-gold" aria-label={`Continuar checkout`} style={{ width: "100%", padding: "14px", borderRadius: 2, display: "flex", alignItems: "center", justifyContent: "center", gap: 10, fontSize: "0.7rem", letterSpacing: "0.15em" }}>
-              Continuar <ChevronRight size={14} aria-hidden="true" />
+            <button 
+              onClick={()=>setCheckoutStep(true)} 
+              disabled={cart.length === 0 || totalKg < 10} 
+              className="btn-gold" 
+              aria-label={`Continuar checkout`} 
+              style={{ 
+                width: "100%", padding: "14px", borderRadius: 2, 
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 10, 
+                fontSize: "0.7rem", letterSpacing: "0.15em",
+                opacity: (cart.length === 0 || totalKg < 10) ? 0.5 : 1,
+                cursor: (cart.length === 0 || totalKg < 10) ? "not-allowed" : "pointer"
+              }}>
+              {totalKg < 10 ? `Faltan ${(10 - totalKg).toFixed(1)} kg para comprar` : <>Continuar <ChevronRight size={14} aria-hidden="true" /></>}
             </button>
           ) : (
             <button onClick={handleProceed} disabled={submitting} className="btn-gold" aria-label={`Finalizar pedido por WhatsApp`} style={{ width: "100%", padding: "14px", borderRadius: 2, display: "flex", alignItems: "center", justifyContent: "center", gap: 10, fontSize: "0.7rem", letterSpacing: "0.15em", background:submitting?"#555":"linear-gradient(135deg,#c9a84c,#dbbe6a)" }}>
@@ -177,6 +239,7 @@ export default function CartDrawer({ cart, margin, cartTotal, cartCount, updateQ
           <p style={{ textAlign: "center", marginTop: 12, fontSize: "0.56rem", color: "#3a3530", letterSpacing: "0.15em", textTransform: "uppercase" }}>
             {checkoutStep ? "Tus datos se guardarán de forma segura" : "Checkout seguro"}
           </p>
+
         </div>
       </div>
     </div>
