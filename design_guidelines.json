@@ -1,0 +1,133 @@
+{
+  "project_name": "Premium Nuts E-Commerce & Admin Platform",
+  "theme_and_archetype": {
+    "theme": "Light",
+    "archetype": "Archetype 1 (Organic & Earthy)",
+    "description": "Premium, warm, tactile aesthetic avoiding the cliché 'green/wood' organic look. Utilizes terracotta, cream, and deep espresso to evoke high-end culinary quality and earthy richness."
+  },
+  "typography": {
+    "font_family": {
+      "heading": "'Cormorant Garamond', serif",
+      "body": "'Manrope', sans-serif"
+    },
+    "scale": {
+      "h1": "text-5xl md:text-6xl tracking-tight font-medium",
+      "h2": "text-4xl md:text-5xl tracking-tight font-medium",
+      "h3": "text-2xl md:text-3xl font-medium",
+      "body": "text-base md:text-lg leading-relaxed",
+      "overline": "text-xs tracking-[0.2em] uppercase font-bold",
+      "small": "text-sm text-[#2C1E16]/70"
+    },
+    "pairing_strategy": "High-end editorial contrast: Use Cormorant Garamond for all primary headings to establish luxury, and Manrope for clean, modern legibility in body copy, pricing, and admin UI."
+  },
+  "colors": {
+    "background": {
+      "default": "#F9F6F0",
+      "alt": "#E5D9C5",
+      "admin": "#FFFFFF",
+      "glass": "rgba(249, 246, 240, 0.7)"
+    },
+    "text": {
+      "primary": "#2C1E16",
+      "secondary": "#5D4B41",
+      "inverse": "#F9F6F0",
+      "muted": "#968B83"
+    },
+    "primary": {
+      "default": "#C35214",
+      "hover": "#A64B29",
+      "foreground": "#FFFFFF"
+    },
+    "accent": {
+      "terracotta": "#D97742",
+      "gold": "#D4AF37",
+      "sage": "#8A9A86"
+    },
+    "border": {
+      "default": "rgba(44, 30, 22, 0.1)",
+      "strong": "rgba(44, 30, 22, 0.3)"
+    },
+    "rules": "Never use pure black or pure white except in the Admin dashboard background. Greys must be tinted with warm tones. Use high contrast text (#2C1E16) for accessibility."
+  },
+  "spacing_and_layout": {
+    "padding": {
+      "section_y": "py-20 md:py-32",
+      "container_x": "px-6 md:px-12",
+      "card": "p-6 md:p-8"
+    },
+    "border_radius": {
+      "button": "rounded-full",
+      "card": "rounded-2xl",
+      "input": "rounded-xl"
+    },
+    "grid_patterns": {
+      "ecom_catalog": "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 md:gap-12",
+      "bento_promos": "grid-cols-1 md:grid-cols-12 gap-6",
+      "admin_dashboard": "grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4"
+    },
+    "general": "Embrace negative space. E-commerce sections should feel generous and breathable. Admin dashboard uses tighter gaps (gap-4) and 1px borders to maximize data density."
+  },
+  "components": {
+    "navigation": "Sticky top with Crystal Glassmorphism: backdrop-blur-xl bg-[#F9F6F0]/70 border-b border-[#2C1E16]/10. Must remain readable.",
+    "buttons": "Primary: bg-[#C35214] text-white rounded-full px-8 py-3 hover:-translate-y-1 transition-transform. Secondary: border border-[#2C1E16] text-[#2C1E16] rounded-full.",
+    "product_cards": "No heavy drop shadows. Flat background (#FFFFFF or #E5D9C5) with 1px border-[#2C1E16]/10. On hover: scale-[1.02] and subtle shadow-lg.",
+    "chatbot_widget": "Avoid clunky tech bubbles. Floating circular button bottom-right (Primary color). Chat modal should be an elegant slide-up panel or fixed absolute container using Manrope, matching brand colors (warm tones, no tech-blue).",
+    "checkout_flow": "Step-by-step accordion or multi-step form using heavily customized Shadcn components. Clean, distraction-free layout (remove header links during checkout).",
+    "admin_panel": "Follow 'Technical Look'. White background, pure functional layout. Toggles, Tables, and Charts (Shadcn/Recharts). High contrast metrics.",
+    "tags_badges": "Offer/Sale badges in Accent Gold (#D4AF37) or Primary (#C35214) with uppercase overline typography."
+  },
+  "motion_and_interaction": {
+    "hover": "All interactive elements must have clear hover states (color darken + slight transform if appropriate).",
+    "transitions": "Use 'transition-all duration-300 ease-out'.",
+    "page_load": "Staggered fade-up for product grids (e.g., using framer-motion)."
+  },
+  "media": {
+    "images": [
+      {
+        "category": "hero",
+        "description": "High-end presentation of almonds in a ceramic bowl",
+        "url": "https://images.unsplash.com/photo-1608797178974-15b35a64ede9?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzl8MHwxfHNlYXJjaHwyfHxhbG1vbmRzfGVufDB8fHx8MTc3ODUwNjUwOXww&ixlib=rb-4.1.0&q=85"
+      },
+      {
+        "category": "product_almonds",
+        "description": "Close up photo of brown almond nuts",
+        "url": "https://images.unsplash.com/photo-1600188999986-331bec5f9a8d?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzl8MHwxfHNlYXJjaHwzfHxhbG1vbmRzfGVufDB8fHx8MTc3ODUwNjUwOXww&ixlib=rb-4.1.0&q=85"
+      },
+      {
+        "category": "product_walnuts_1",
+        "description": "Closeup photography of walnuts",
+        "url": "https://images.unsplash.com/photo-1524593000379-d4729b2c4f99?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Nzd8MHwxfHNlYXJjaHwyfHx3YWxudXRzfGVufDB8fHx8MTc3ODUwNjUwOXww&ixlib=rb-4.1.0&q=85"
+      },
+      {
+        "category": "product_walnuts_2",
+        "description": "Brown nuts mixed",
+        "url": "https://images.unsplash.com/photo-1524593656068-fbac72624bb0?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Nzd8MHwxfHNlYXJjaHwxfHx3YWxudXRzfGVufDB8fHx8MTc3ODUwNjUwOXww&ixlib=rb-4.1.0&q=85"
+      },
+      {
+        "category": "lifestyle_cooking",
+        "description": "Healthy food arrangement",
+        "url": "https://images.pexels.com/photos/4589141/pexels-photo-4589141.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"
+      },
+      {
+        "category": "avatar_customer_1",
+        "description": "Woman smiling, for CRM/Reviews",
+        "url": "https://images.unsplash.com/photo-1672462478040-a5920e2c23d8?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzR8MHwxfHNlYXJjaHwxfHxzbWlsaW5nJTIwcGVyc29uJTIwcG9ydHJhaXR8ZW58MHx8fHwxNzc4NTA2NTE0fDA&ixlib=rb-4.1.0&q=85"
+      },
+      {
+        "category": "avatar_customer_2",
+        "description": "Man smiling warmly, for CRM/Reviews",
+        "url": "https://images.pexels.com/photos/30034933/pexels-photo-30034933.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"
+      }
+    ],
+    "guidelines": "NEVER use placeholder services (via.placeholder.com). Use the provided real Unsplash/Pexels URLs. Apply `object-cover` to all product images to ensure uniformity."
+  },
+  "instructions_to_main_agent": [
+    "Build a robust e-commerce flow in Spanish (rioplatense) targeting the Argentine market.",
+    "Include 'data-testid' on all interactive elements (buttons, inputs, links).",
+    "Use Shadcn UI customized with Tailwind. Do not use generic green/wood colors.",
+    "The E-Commerce storefront uses Light Theme with large spacing. The Admin dashboard must be data-dense, compact, and high-contrast.",
+    "Chatbot must be implemented as a non-intrusive floating widget, avoiding standard SaaS 'blue bubble' defaults.",
+    "Implement MercadoPago logic mock if needed, but ensure the UI steps (Cart -> Client Data -> Shipping -> Payment) are distinct.",
+    "Use Lucide-React or Phosphor Icons for all iconography."
+  ]
+}
