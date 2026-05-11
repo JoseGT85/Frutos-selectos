@@ -1,52 +1,77 @@
-import { useEffect } from "react";
+import React from "react";
 import "@/App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import axios from "axios";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import { Toaster } from "@/components/ui/sonner";
+import { AuthProvider } from "@/store/auth";
+import { CartProvider } from "@/store/cart";
+import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
+import CartDrawer from "@/components/CartDrawer";
+import Chatbot from "@/components/Chatbot";
+import Home from "@/pages/Home";
+import Catalog from "@/pages/Catalog";
+import ProductDetail from "@/pages/ProductDetail";
+import Checkout from "@/pages/Checkout";
+import CheckoutStatus from "@/pages/CheckoutStatus";
+import CheckoutMock from "@/pages/CheckoutMock";
+import AuthPage from "@/pages/AuthPage";
+import MyAccount from "@/pages/MyAccount";
+import About from "@/pages/About";
+import AdminPanel from "@/pages/AdminPanel";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+const StorefrontLayout = ({ children }) => (
+  <>
+    <Navbar />
+    {children}
+    <Footer />
+    <CartDrawer />
+    <Chatbot />
+  </>
+);
 
-const Home = () => {
-  const helloWorldApi = async () => {
-    try {
-      const response = await axios.get(`${API}/`);
-      console.log(response.data.message);
-    } catch (e) {
-      console.error(e, `errored out requesting / api`);
-    }
-  };
+const AppRoutes = () => {
+  const location = useLocation();
+  const isAdmin = location.pathname.startsWith("/admin");
 
-  useEffect(() => {
-    helloWorldApi();
-  }, []);
+  if (isAdmin) {
+    return (
+      <Routes>
+        <Route path="/admin" element={<AdminPanel />} />
+      </Routes>
+    );
+  }
 
   return (
-    <div>
-      <header className="App-header">
-        <a
-          className="App-link"
-          href="https://emergent.sh"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <img src="https://avatars.githubusercontent.com/in/1201222?s=120&u=2686cf91179bbafbc7a71bfbc43004cf9ae1acea&v=4" />
-        </a>
-        <p className="mt-5">Building something incredible ~!</p>
-      </header>
-    </div>
+    <StorefrontLayout>
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/catalogo" element={<Catalog />} />
+        <Route path="/producto/:slug" element={<ProductDetail />} />
+        <Route path="/checkout" element={<Checkout />} />
+        <Route path="/checkout/mock" element={<CheckoutMock />} />
+        <Route path="/checkout/success" element={<CheckoutStatus status="success" />} />
+        <Route path="/checkout/failure" element={<CheckoutStatus status="failure" />} />
+        <Route path="/checkout/pending" element={<CheckoutStatus status="pending" />} />
+        <Route path="/login" element={<AuthPage mode="login" />} />
+        <Route path="/registro" element={<AuthPage mode="register" />} />
+        <Route path="/mi-cuenta" element={<MyAccount />} />
+        <Route path="/nosotros" element={<About />} />
+      </Routes>
+    </StorefrontLayout>
   );
 };
 
 function App() {
   return (
     <div className="App">
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Home />}>
-            <Route index element={<Home />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
+      <AuthProvider>
+        <CartProvider>
+          <BrowserRouter>
+            <AppRoutes />
+            <Toaster />
+          </BrowserRouter>
+        </CartProvider>
+      </AuthProvider>
     </div>
   );
 }

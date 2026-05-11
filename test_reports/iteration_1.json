@@ -1,0 +1,45 @@
+{
+  "summary": "Backend E2E testing for Frutos Secos Premium e-commerce MVP. 33/33 pytest tests passed covering auth (register/login/me/JWT), products CRUD (public + admin RBAC), orders with Mercado Pago mock fallback, mock-pay → lead promotion to customer, webhook (mock mode), chatbot IA (gpt-5.2 via EMERGENT_LLM_KEY) with lead capture, admin dashboard/leads/orders/chat-sessions, and seed idempotency.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/auth/register", "issue": "Email uniqueness is enforced only by Mongo unique index + pre-check; if two requests race, the second will raise a 500 from DuplicateKeyError instead of a clean 400. Not blocking."},
+      {"endpoint": "/api/chat", "issue": "When EMERGENT_LLM_KEY fails or rate-limits, the fallback reply is generic ('inconveniente técnico'). No retry/backoff. Acceptable for MVP."},
+      {"endpoint": "/api/webhook/mercadopago", "issue": "Currently in MOCK mode (MP_ACCESS_TOKEN is placeholder) — webhook returns {ok:true} but does NOT process anything. This is intentional per problem statement."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_frutos_secos.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "None blocking. Optionally: catch DuplicateKeyError in /api/auth/register to return a clean 400 under race conditions.",
+    "When user provides a real MP_ACCESS_TOKEN, retest the webhook path with a real Mercado Pago payment notification (current tests only validate mock-mode behavior)."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 845 lines — recommend splitting into modules (auth.py, products.py, orders.py, chat.py, admin.py, seed.py) before MVP grows.",
+    "CORS is allow_origins=['*'] with allow_credentials=True — browsers reject this combo; if frontend later relies on cookies, switch to explicit origins.",
+    "JWT token is returned in body but no httpOnly cookie is set on login/register. /api/auth/me does support cookie fallback, but login does not Set-Cookie. Inconsistent — either remove cookie path or set it.",
+    "No rate limiting / brute-force lockout on /api/auth/login (system prompt mentions this is expected). Add e.g. slowapi or counter in DB for 5-fails lockout.",
+    "_mark_order_paid uses upsert=False on lead update; if lead doesn't exist (edge case), it silently no-ops. Should upsert or log warning.",
+    "/api/chat replays nothing — comment says LlmChat handles its own history per session, but the LlmChat instance is recreated each request, so context across messages is only maintained inside the Emergent integration. Verified context works in test_chat_context_followup, but worth documenting.",
+    "No input sanitisation on chat message length — could allow large prompt costs. Add max_length validator on ChatIn.message.",
+    "Pydantic ChatIn / ProductIn do not enforce trim or max lengths.",
+    "No pagination on /api/admin/orders, /api/admin/leads (to_list(1000)). OK for MVP, but plan pagination."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_frutos_secos.py"
+  ],
+  "success_rate": {"backend": "100% (33/33)", "frontend": "not tested"},
+  "test_credentials": "Admin: admin@frutossecos.com.ar / Admin123! (confirmed working). Customer accounts created dynamically per test run.",
+  "seed_data_creation": "Verified: 8 seed products and 1 admin user are present at startup. Seed is idempotent (admin not duplicated). Test data uses TEST_ prefix for products and random UUIDs for customer emails — no cleanup performed but does not pollute primary catalog.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All 9 backend test areas from the review request pass. Mercado Pago is intentionally MOCK (MP_ACCESS_TOKEN placeholder triggers _create_mp_preference → mock URL). When user provides real MP token, run an integration test with sandbox MP. Frontend (web UI) was NOT tested per request scope. EMERGENT_LLM_KEY is functional and gpt-5.2 chat replies are returned in ~2-5s.",
+  "rca_of_the_issue": "No bugs found. RCA not applicable."
+}
