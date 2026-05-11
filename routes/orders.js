@@ -21,7 +21,7 @@ router.post("/", async (req, res) => {
     const isFreeShippingEligible = (totalKg >= 10 && totalAmount >= 400000);
     
     // Procesamos la orden en el servicio
-    const order = await ordersService.processOrder(clientData, cartData, totalKg || 0);
+    const order = await ordersService.processOrder(clientData, cartData, totalKg || 0, totalAmount);
     
     // Si el servicio confirma que es envío gratis (porque es 1ra compra)
     if (order.shippingStatus === "GRATIS" || (isFreeShippingEligible && order.isFirstOrder)) {

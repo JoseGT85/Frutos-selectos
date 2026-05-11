@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { X, Plus, Minus, Package, MessageCircle, ChevronRight, Trash2 } from "lucide-react";
+import { X, Plus, Minus, Package, MessageCircle, ChevronRight, Trash2, DollarSign } from "lucide-react";
 import { calcSalePrice, fmt } from "../utils/pricing.js";
 
 const PROVINCIAS = [

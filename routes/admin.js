@@ -4,9 +4,11 @@
 //  gestión de margen y endpoint unificado de chat IA.
 // ═══════════════════════════════════════════════════════════════════════════
 import { Router }             from "express";
-import fs                     from "fs";
-import path                   from "path";
+import jwt                    from "jsonwebtoken";
 import multer                 from "multer";
+import path                   from "path";
+import fs                     from "fs/promises";
+import { fileURLToPath }      from "url";
 import { db }                 from "../supabase.js";
 import { SecurityMiddleware } from "../security/middleware.js";
 import { kbService }          from "../kb-service.js";
@@ -14,9 +16,11 @@ import { settings }           from "../settings-service.js";
 import { responseCache }      from "../response-cache.js";
 import { customCatalog }      from "../custom-catalog-service.js";
 
-const router   = Router();
-const security = new SecurityMiddleware();
-const LOG_DIR  = process.env.LOG_DIR || "./logs";
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const router     = Router();
+const security   = new SecurityMiddleware();
+const LOG_DIR    = process.env.LOG_DIR || "./logs";
 
 // ── Refs inyectadas desde index.js ───────────────────────────────────────────
 let _orchestratorRef = null;
@@ -145,20 +149,26 @@ const upload = multer({
 });
 
 router.post("/catalog/upload", upload.single("image"), async (req, res) => {
-  if (!req.file) return res.status(400).json({ ok: false, error: "No se encontró el archivo" });
+  if (!req.file) return res.status(400).json({ ok: false, error: "No image provided" });
   
   try {
-    const file = req.file.buffer;
+    const fileBuffer = req.file.buffer;
     const ext = path.extname(req.file.originalname);
     const fileName = `product-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
     
-    const { url, error } = await db.uploadImage(file, fileName);
+    // Intento 1: Subir a Supabase (Nube)
+    const { url, error } = await db.uploadImage(fileBuffer, fileName);
     
     if (error) {
-      console.error("[UPLOAD] Error Supabase:", error);
-      return res.status(500).json({ ok: false, error: "Error subiendo a la nube" });
+      // Intento 2: Fallback a almacenamiento local (Desarrollo o estático)
+      console.warn(`[UPLOAD] Fallback local activado: ${error.message || error}`);
+      const uploadPath = path.join(__dirname, "..", "public", "uploads", fileName);
+      await fs.writeFile(uploadPath, fileBuffer);
+      const localUrl = `/uploads/${fileName}`;
+      return res.json({ ok: true, imageUrl: localUrl });
     }
 
+    // Éxito en la nube
     res.json({ ok: true, imageUrl: url });
   } catch (err) {
     console.error("[UPLOAD] Exception:", err);

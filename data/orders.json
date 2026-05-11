@@ -1,0 +1,54 @@
+[
+  {
+    "id": "ORD-L4O271PXG",
+    "client": {
+      "name": "jose ",
+      "lastname": "torres",
+      "email": "",
+      "phone": "2615382326",
+      "address": "fdgfdgfdgfdg",
+      "cuit": "20314320922",
+      "province": "Mendoza"
+    },
+    "cart": [
+      {
+        "id": 1,
+        "name": "ALMENDRA NON PAREIL 23/25 - CHILE 2026",
+        "cost": 195700,
+        "costPerKg": 19570,
+        "category": "Nueces",
+        "unit": "CAJA X 10 KG",
+        "emoji": "🌰",
+        "imageUrl": "https://images.unsplash.com/photo-1508061253366-f7da158b6d46?w=600&q=80",
+        "section": "ALMENDRA NON PAREIL",
+        "peso_kg": 10,
+        "tipo_producto": "bulto_10kg",
+        "originalName": "ALMENDRA NON PAREIL 23/25 - CHILE 2026",
+        "salePrice": 254410,
+        "margin": 30,
+        "qty": 1
+      },
+      {
+        "id": 2,
+        "name": "ALMENDRA NON PAREIL 27/30 - CHILE 2026",
+        "cost": 187500,
+        "costPerKg": 18750,
+        "category": "Nueces",
+        "unit": "CAJA X 10 KG",
+        "emoji": "🌰",
+        "imageUrl": "http://localhost:3000/uploads/product-1775431151728-805604523.jpg",
+        "section": "ALMENDRA NON PAREIL",
+        "peso_kg": 10,
+        "tipo_producto": "bulto_10kg",
+        "originalName": "ALMENDRA NON PAREIL 27/30 - CHILE 2026",
+        "salePrice": 243750,
+        "margin": 30,
+        "qty": 1
+      }
+    ],
+    "totalKg": 20,
+    "shippingStatus": "Envío a cargo del cliente",
+    "isFirstOrder": true,
+    "date": "2026-05-11T19:11:21.430Z"
+  }
+]
