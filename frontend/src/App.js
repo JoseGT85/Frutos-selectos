@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/store/auth";
 import { CartProvider } from "@/store/cart";
+import { ThemeProvider } from "@/store/theme";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import CartDrawer from "@/components/CartDrawer";
@@ -64,14 +65,16 @@ const AppRoutes = () => {
 function App() {
   return (
     <div className="App">
-      <AuthProvider>
-        <CartProvider>
-          <BrowserRouter>
-            <AppRoutes />
-            <Toaster />
-          </BrowserRouter>
-        </CartProvider>
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <CartProvider>
+            <BrowserRouter>
+              <AppRoutes />
+              <Toaster />
+            </BrowserRouter>
+          </CartProvider>
+        </AuthProvider>
+      </ThemeProvider>
     </div>
   );
 }

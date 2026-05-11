@@ -24,20 +24,21 @@ const Catalog = () => {
   const categories = [...new Set(products.map((p) => p.category))];
 
   return (
-    <main className="px-6 md:px-12 py-12 md:py-20 max-w-7xl mx-auto" data-testid="catalog-page">
+    <main className="px-6 md:px-12 py-12 md:py-20 max-w-7xl mx-auto" data-testid="catalog-page" style={{ color: "var(--text-primary)" }}>
       <div className="mb-12">
-        <p className="text-overline text-[#C35214] mb-4">Tienda</p>
-        <h1 className="font-serif text-5xl md:text-6xl text-[#2C1E16] mb-6">Nuestro catálogo</h1>
+        <p className="text-overline mb-4" style={{ color: "var(--primary)" }}>Tienda</p>
+        <h1 className="font-serif text-5xl md:text-6xl mb-6" style={{ color: "var(--text-primary)" }}>Nuestro catálogo</h1>
 
         <div className="flex items-center gap-3 max-w-md mt-8">
           <div className="flex-1 relative">
-            <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#968B83]" />
+            <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2" style={{ color: "var(--text-muted)" }} />
             <input
               type="text"
               placeholder="Buscar producto..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-12 pr-4 py-3 rounded-full bg-white border border-[#2C1E16]/10 outline-none focus:ring-2 focus:ring-[#C35214]/30 text-sm"
+              className="w-full pl-12 pr-4 py-3 rounded-full border outline-none text-sm"
+              style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border)", color: "var(--text-primary)" }}
               data-testid="search-input"
             />
           </div>
@@ -46,9 +47,12 @@ const Catalog = () => {
         <div className="flex gap-2 mt-6 flex-wrap">
           <Link
             to="/catalogo"
-            className={`px-4 py-2 rounded-full text-sm border transition-colors ${
-              !category ? "bg-[#2C1E16] text-white border-[#2C1E16]" : "border-[#2C1E16]/20 hover:bg-[#E5D9C5]"
-            }`}
+            className="px-4 py-2 rounded-full text-sm border transition-colors"
+            style={
+              !category
+                ? { backgroundColor: "var(--text-primary)", color: "var(--text-inverse)", borderColor: "var(--text-primary)" }
+                : { borderColor: "var(--border-strong)", color: "var(--text-primary)" }
+            }
             data-testid="filter-all"
           >
             Todos
@@ -57,12 +61,15 @@ const Catalog = () => {
             <Link
               key={c}
               to={`/catalogo?category=${c}`}
-              className={`px-4 py-2 rounded-full text-sm border transition-colors capitalize ${
-                category === c ? "bg-[#2C1E16] text-white border-[#2C1E16]" : "border-[#2C1E16]/20 hover:bg-[#E5D9C5]"
-              }`}
+              className="px-4 py-2 rounded-full text-sm border transition-colors capitalize"
+              style={
+                category === c
+                  ? { backgroundColor: "var(--text-primary)", color: "var(--text-inverse)", borderColor: "var(--text-primary)" }
+                  : { borderColor: "var(--border-strong)", color: "var(--text-primary)" }
+              }
               data-testid={`filter-${c}`}
             >
-              {c.replace("-", " ")}
+              {c.replace(/-/g, " ")}
             </Link>
           ))}
         </div>
@@ -71,7 +78,7 @@ const Catalog = () => {
       {loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 md:gap-12">
           {[...Array(6)].map((_, i) => (
-            <div key={i} className="aspect-[3/4] bg-[#E5D9C5] rounded-2xl animate-pulse"></div>
+            <div key={i} className="aspect-[3/4] rounded-2xl animate-pulse" style={{ backgroundColor: "var(--bg-alt)" }}></div>
           ))}
         </div>
       ) : (
@@ -80,28 +87,30 @@ const Catalog = () => {
             <Link
               key={p.id}
               to={`/producto/${p.slug}`}
-              className="group block bg-white rounded-2xl border border-[#2C1E16]/10 overflow-hidden hover:shadow-xl transition-all hover:-translate-y-1"
+              className="group block rounded-2xl border overflow-hidden hover:shadow-xl transition-all hover:-translate-y-1"
+              style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border)" }}
               data-testid={`product-card-${p.slug}`}
             >
-              <div className="aspect-square overflow-hidden bg-[#E5D9C5] relative">
+              <div className="aspect-square overflow-hidden relative" style={{ backgroundColor: "var(--bg-alt)" }}>
                 <img src={p.image} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                 {p.featured && (
-                  <span className="absolute top-3 left-3 bg-[#D4AF37] text-[#2C1E16] text-overline px-3 py-1 rounded-full">
+                  <span className="absolute top-3 left-3 text-overline px-3 py-1 rounded-full" style={{ backgroundColor: "var(--gold)", color: "var(--text-primary)" }}>
                     Destacado
                   </span>
                 )}
               </div>
               <div className="p-6">
-                <h3 className="font-serif text-2xl text-[#2C1E16] mb-2">{p.name}</h3>
-                <p className="text-sm text-[#5D4B41] mb-4 line-clamp-2 leading-relaxed">{p.description}</p>
+                <h3 className="font-serif text-2xl mb-2" style={{ color: "var(--text-primary)" }}>{p.name}</h3>
+                <p className="text-sm mb-4 line-clamp-2 leading-relaxed" style={{ color: "var(--text-secondary)" }}>{p.description}</p>
                 <div className="flex items-end justify-between">
                   <div>
-                    <p className="text-xs text-[#968B83] mb-1">desde</p>
-                    <p className="text-xl font-semibold text-[#C35214]">
+                    <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>desde</p>
+                    <p className="text-xl font-semibold" style={{ color: "var(--primary)" }}>
                       {formatARS(p.weight_options?.[0]?.price || p.base_price)}
                     </p>
                   </div>
-                  <span className="text-sm font-medium border border-[#2C1E16]/20 rounded-full px-4 py-2 group-hover:bg-[#2C1E16] group-hover:text-white transition-colors">
+                  <span className="text-sm font-medium border rounded-full px-4 py-2 transition-colors group-hover:bg-current"
+                        style={{ borderColor: "var(--border-strong)", color: "var(--text-primary)" }}>
                     Ver más
                   </span>
                 </div>
@@ -112,7 +121,7 @@ const Catalog = () => {
       )}
 
       {!loading && filtered.length === 0 && (
-        <div className="text-center py-20 text-[#968B83]">No se encontraron productos.</div>
+        <div className="text-center py-20" style={{ color: "var(--text-muted)" }}>No se encontraron productos.</div>
       )}
     </main>
   );

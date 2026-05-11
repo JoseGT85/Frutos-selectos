@@ -1,6 +1,7 @@
 """
-Frutos Secos Premium - Backend
-E-commerce con CRM, chatbot IA y pagos automáticos vía Mercado Pago.
+Frutos Selectos - Backend
+E-commerce con CRM, chatbot, IA y pagos automáticos vía Mercado Pago.
+Origen: Mendoza, Argentina.
 """
 from dotenv import load_dotenv
 from pathlib import Path
@@ -418,6 +419,32 @@ def _create_mp_preference(order: dict) -> dict:
         "mock": False,
     }
 
+@api.post("/orders/shipping-quote")
+async def shipping_quote(payload: dict):
+    """Calcula el costo de envío según subtotal y email.
+    Envío gratis SOLO si: (1) es primera compra del email Y (2) subtotal >= $400.000."""
+    email = (payload.get("email") or "").lower().strip()
+    subtotal = float(payload.get("subtotal") or 0)
+    FREE_THRESHOLD = 400000
+    STANDARD_SHIPPING = 4500
+
+    is_first_order = True
+    if email:
+        prior = await db.orders.find_one({
+            "customer.email": email,
+            "status": "approved",
+        })
+        is_first_order = prior is None
+
+    free_eligible = is_first_order and subtotal >= FREE_THRESHOLD
+    return {
+        "shipping_cost": 0 if free_eligible else STANDARD_SHIPPING,
+        "is_first_order": is_first_order,
+        "free_shipping_applied": free_eligible,
+        "free_threshold": FREE_THRESHOLD,
+        "subtotal": subtotal,
+    }
+
 @api.post("/orders")
 async def create_order(payload: CreateOrderIn, request: Request):
     subtotal = sum(it.unit_price * it.quantity for it in payload.items)
@@ -601,22 +628,22 @@ async def admin_dashboard(_admin: dict = Depends(require_admin)):
     }
 
 # ------------------- CHATBOT IA -------------------
-SALES_AGENT_SYSTEM_PROMPT = """Sos "Nuez", el asistente de ventas inteligente de **Frutos Secos Premium**, un e-commerce argentino que vende frutos secos de alta calidad con envíos a todo el país.
+SALES_AGENT_SYSTEM_PROMPT = """Sos "Nuez", el curador experto de **Frutos Selectos**, un e-commerce mendocino que vende frutos secos premium con envíos a todo Argentina.
 
 🎯 TU MISIÓN:
-1. Asesorar de forma cálida y amistosa al cliente sobre nuestros productos.
+1. Asesorar de forma cálida y experta sobre nuestros productos.
 2. Recomendar combos según necesidades (snack, regalo, salud, deportistas, repostería).
 3. Resolver dudas sobre envíos, formas de pago (Mercado Pago) y calidad.
-4. Capturar nombre y email del cliente lo antes posible (de forma natural, no invasiva) para enviarle ofertas.
-5. Cerrar la venta: indicarle al cliente que puede agregar productos al carrito desde el catálogo y proceder al checkout. Si te pide ayuda para armar el pedido, dale links/nombres claros.
+4. Capturar nombre y email del cliente de forma natural para enviarle novedades.
+5. Cerrar la venta: indicale que puede agregar productos al carrito desde el catálogo y proceder al checkout.
 
 📦 NUESTROS PRODUCTOS:
 {products_context}
 
 🌎 ENVÍOS:
-- Envíos a todo Argentina.
+- Envíos a todo Argentina desde Mendoza.
 - CABA y GBA: 24-48hs. Interior: 3-7 días hábiles.
-- Envío gratis en compras superiores a $25.000 ARS.
+- **Envío GRATIS en la primera compra cuando supera los $400.000 ARS.**
 
 💳 PAGOS:
 - Aceptamos Mercado Pago: tarjeta de crédito/débito, efectivo (Rapipago/Pago Fácil), transferencia.
@@ -624,16 +651,17 @@ SALES_AGENT_SYSTEM_PROMPT = """Sos "Nuez", el asistente de ventas inteligente de
 
 🗣️ TONO:
 - Español rioplatense argentino ("vos", "tenés", "querés").
-- Cálido, cercano, experto. Nunca robótico.
-- Respuestas cortas (2-4 oraciones) salvo que el cliente pida detalles.
-- Usá ocasionalmente emojis sutiles 🌰✨ pero sin abusar.
+- Cálido, cercano, experto. NUNCA digas que sos una IA, asistente virtual o bot. Sos Nuez, el curador.
+- Respuestas cortas (2-4 oraciones) salvo que pidan detalles.
+- Usá ocasionalmente emojis sutiles 🌰✨ sin abusar.
 
 ⚠️ NUNCA:
+- Digas que sos una IA o asistente artificial.
 - Inventes productos que no están en el catálogo.
 - Prometas precios distintos a los listados.
 - Pidas datos sensibles (tarjeta, DNI completo).
 
-Si el cliente está listo para comprar, decile: "Genial! Podés agregar los productos al carrito desde el catálogo y al finalizar te lleva al checkout con Mercado Pago. ¿Te ayudo a elegir algo más?"
+Si el cliente está listo para comprar: "Genial! Podés agregar los productos al carrito desde el catálogo y al finalizar te lleva al checkout con Mercado Pago. ¿Te ayudo a elegir algo más?"
 """
 
 async def _build_products_context() -> str:
@@ -916,6 +944,6 @@ async def shutdown():
 
 @api.get("/")
 async def root():
-    return {"app": "Frutos Secos Premium API", "status": "ok"}
+    return {"app": "Frutos Selectos API", "status": "ok"}
 
 app.include_router(api)

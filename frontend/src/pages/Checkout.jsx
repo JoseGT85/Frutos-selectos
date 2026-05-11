@@ -10,6 +10,11 @@ const PROVINCES = [
   "Entre Ríos", "Formosa", "Jujuy", "La Pampa", "La Rioja", "Mendoza", "Misiones",
   "Neuquén", "Río Negro", "Salta", "San Juan", "San Luis", "Santa Cruz", "Santa Fe",
   "Santiago del Estero", "Tierra del Fuego", "Tucumán",
+]; = [
+  "CABA", "Buenos Aires", "Catamarca", "Chaco", "Chubut", "Córdoba", "Corrientes",
+  "Entre Ríos", "Formosa", "Jujuy", "La Pampa", "La Rioja", "Mendoza", "Misiones",
+  "Neuquén", "Río Negro", "Salta", "San Juan", "San Luis", "Santa Cruz", "Santa Fe",
+  "Santiago del Estero", "Tierra del Fuego", "Tucumán",
 ];
 
 const Checkout = () => {
@@ -18,6 +23,7 @@ const Checkout = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [shippingInfo, setShippingInfo] = useState({ shipping_cost: 4500, free_shipping_applied: false, is_first_order: true, free_threshold: 400000 });
 
   const [form, setForm] = useState({
     email: user?.email || "",
@@ -30,10 +36,24 @@ const Checkout = () => {
     notes: "",
   });
 
-  const shipping = subtotal >= 25000 ? 0 : 2500;
+  const shipping = shippingInfo.shipping_cost;
   const total = subtotal + shipping;
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+
+  // Recalcular envío cuando cambia email o subtotal
+  React.useEffect(() => {
+    const fetchShipping = async () => {
+      try {
+        const { data } = await api.post("/orders/shipping-quote", {
+          email: form.email,
+          subtotal,
+        });
+        setShippingInfo(data);
+      } catch {}
+    };
+    if (subtotal > 0) fetchShipping();
+  }, [form.email, subtotal]);
 
   if (items.length === 0) {
     return (
@@ -142,6 +162,11 @@ const Checkout = () => {
               <span>Envío</span>
               <span>{shipping === 0 ? <span className="text-[#8A9A86] font-medium">GRATIS</span> : formatARS(shipping)}</span>
             </div>
+            {!shippingInfo.free_shipping_applied && shippingInfo.is_first_order && (
+              <div className="text-[11px] text-[#968B83] italic">
+                💡 Sumá {formatARS(shippingInfo.free_threshold - subtotal)} más en tu primera compra y el envío es gratis.
+              </div>
+            )}
             <div className="flex justify-between text-lg font-semibold pt-3 border-t border-[#2C1E16]/10">
               <span>Total</span>
               <span data-testid="checkout-total">{formatARS(total)}</span>

@@ -12,16 +12,20 @@ const CartDrawer = () => {
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
-      <SheetContent className="bg-[#F9F6F0] border-l border-[#2C1E16]/10 w-full sm:max-w-md flex flex-col" data-testid="cart-drawer">
+      <SheetContent
+        className="border-l w-full sm:max-w-md flex flex-col"
+        style={{ backgroundColor: "var(--bg-default)", borderColor: "var(--border)", color: "var(--text-primary)" }}
+        data-testid="cart-drawer"
+      >
         <SheetHeader>
-          <SheetTitle className="font-serif text-2xl text-[#2C1E16]">Tu carrito</SheetTitle>
+          <SheetTitle className="font-serif text-2xl" style={{ color: "var(--text-primary)" }}>Tu carrito</SheetTitle>
         </SheetHeader>
 
         {items.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center text-center px-6">
-            <ShoppingBag size={48} className="text-[#968B83] mb-4" />
-            <p className="text-[#5D4B41]">Tu carrito está vacío</p>
-            <p className="text-sm text-[#968B83] mt-2">Sumá frutos secos premium y aprovechá envío gratis desde $25.000</p>
+            <ShoppingBag size={48} style={{ color: "var(--text-muted)" }} className="mb-4" />
+            <p style={{ color: "var(--text-secondary)" }}>Tu carrito está vacío</p>
+            <p className="text-sm mt-2" style={{ color: "var(--text-muted)" }}>Sumá frutos selectos premium y aprovechá envío gratis en tu primera compra superando $400.000.</p>
           </div>
         ) : (
           <div className="flex-1 overflow-y-auto scrollbar-thin py-4 space-y-4">
