@@ -127,3 +127,15 @@ export async function uploadImageAPI(file) {
   if (!res.ok) throw new Error("Error al subir archivo");
   return res.json();
 }
+export async function getMarginsAPI() {
+  return fetchWithAuth(`${BACKEND_URL}/api/admin/catalog/margins`, {
+    method: "GET"
+  });
+}
+
+export async function updateMarginAPI(id, margin) {
+  return fetchWithAuth(`${BACKEND_URL}/api/admin/catalog/margins`, {
+    method: "PUT",
+    body: JSON.stringify({ id, margin: Number(margin) })
+  });
+}

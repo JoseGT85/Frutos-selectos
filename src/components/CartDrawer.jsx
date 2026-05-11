@@ -2,12 +2,20 @@ import { useEffect, useRef, useState } from "react";
 import { X, Plus, Minus, Package, MessageCircle, ChevronRight, Trash2 } from "lucide-react";
 import { calcSalePrice, fmt } from "../utils/pricing.js";
 
+const PROVINCIAS = [
+  "Mendoza", "Buenos Aires", "CABA", "Cordoba", "Santa Fe", "San Luis", "San Juan", "Otro"
+];
+
+const TARIFAS = {
+  "Mendoza": 0, "Buenos Aires": 8500, "CABA": 8500, "Cordoba": 7500, "Santa Fe": 7500, "San Luis": 6000, "San Juan": 6000, "Otro": 9500
+};
+
 export default function CartDrawer({ cart, margin, cartTotal, cartCount, updateQty, removeFromCart, clearCart, onClose, onWhatsApp }) {
   const drawerRef = useRef(null);
   const closeRef  = useRef(null);
   
   const [checkoutStep, setCheckoutStep] = useState(false);
-  const [formData, setFormData] = useState({ name:"", lastname:"", email:"", phone:"", address:"", cuit:"" });
+  const [formData, setFormData] = useState({ name:"", lastname:"", email:"", phone:"", address:"", cuit:"", province:"Mendoza" });
   const [submitting, setSubmitting] = useState(false);
   const totalKg = cart.reduce((s,i) => s + ((i.peso_kg || 1) * i.qty), 0);
 
@@ -39,29 +47,40 @@ export default function CartDrawer({ cart, margin, cartTotal, cartCount, updateQ
   }, [onClose]);
 
   const handleProceed = async () => {
-    if (!formData.name || !formData.lastname || !formData.phone || !formData.address) {
-      return alert("Por favor completá los datos obligatorios (Nombre, Apellido, Teléfono y Dirección)");
+    if (!formData.name || !formData.lastname || !formData.phone || !formData.address || !formData.province) {
+      return alert("Por favor completá los datos obligatorios (Nombre, Apellido, Teléfono, Provincia y Dirección)");
     }
     setSubmitting(true);
     try {
-      // URL dinámica: en local usa VITE_BACKEND_URL, en producción usa ruta relativa
       const _isLocal = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
       const BACKEND_URL = _isLocal ? (import.meta.env.VITE_BACKEND_URL || "http://localhost:3000") : "";
       const res = await fetch(`${BACKEND_URL}/api/orders`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ clientData: formData, cartData: cart, totalKg, cartTotal })
+        body: JSON.stringify({ clientData: formData, cartData: cart, totalKg, totalAmount: cartTotal })
       });
       if (!res.ok) throw new Error("Error del servidor al validar orden");
       const data = await res.json();
-      onWhatsApp(data.order.shippingStatus, totalKg, formData);
-      onClose();
+      
+      if (data.paymentUrl) {
+        window.location.href = data.paymentUrl; // Redirigir a Mercado Pago
+      } else {
+        onWhatsApp(data.order.shippingStatus, totalKg, formData);
+        onClose();
+      }
     } catch (e) {
-      alert("No pudimos conectar con el servidor. Se enviará a WhatsApp directo...");
-      onWhatsApp("Sin validar (error de conexión temporal)", totalKg, formData);
+      alert("Error al procesar el pago. Intentando por WhatsApp...");
+      onWhatsApp("Error en pasarela (Pago pendiente)", totalKg, formData);
       onClose();
     }
   };
+
+  const getShippingCost = () => {
+    if (totalKg >= 10 && cartTotal >= 400000) return 0; // Podríamos validar si es 1ra compra en backend
+    return TARIFAS[formData.province] || TARIFAS["Otro"];
+  };
+
+  const shippingCost = getShippingCost();
 
   const fv = (k,v) => setFormData(p => ({...p, [k]: v}));
 
@@ -141,7 +160,18 @@ export default function CartDrawer({ cart, margin, cartTotal, cartCount, updateQ
                 <div style={{flex:1}}><p style={{fontSize:"0.56rem",color:"#555",marginBottom:4}}>Teléfono (WA) *</p><input style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:3,color:"#e8e0d0",padding:"10px 14px",width:"100%",outline:"none"}} type="tel" value={formData.phone} onChange={e=>fv("phone",e.target.value)} /></div>
                 <div style={{flex:1}}><p style={{fontSize:"0.56rem",color:"#555",marginBottom:4}}>CUIT / CUIL</p><input style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:3,color:"#e8e0d0",padding:"10px 14px",width:"100%",outline:"none"}} value={formData.cuit} onChange={e=>fv("cuit",e.target.value)} /></div>
               </div>
-              <div><p style={{fontSize:"0.56rem",color:"#555",marginBottom:4}}>Dirección de Envío *</p><input style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:3,color:"#e8e0d0",padding:"10px 14px",width:"100%",outline:"none"}} value={formData.address} onChange={e=>fv("address",e.target.value)} /></div>
+              <div style={{display:"flex",gap:10}}>
+                <div style={{flex:1}}><p style={{fontSize:"0.56rem",color:"#555",marginBottom:4}}>Provincia *</p>
+                  <select 
+                    style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:3,color:"#e8e0d0",padding:"10px 14px",width:"100%",outline:"none"}}
+                    value={formData.province} 
+                    onChange={e=>fv("province", e.target.value)}
+                  >
+                    {PROVINCIAS.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </div>
+                <div style={{flex:1}}><p style={{fontSize:"0.56rem",color:"#555",marginBottom:4}}>Dirección de Envío *</p><input style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:3,color:"#e8e0d0",padding:"10px 14px",width:"100%",outline:"none"}} value={formData.address} onChange={e=>fv("address",e.target.value)} /></div>
+              </div>
               <div><p style={{fontSize:"0.56rem",color:"#555",marginBottom:4}}>Email (Opcional)</p><input style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:3,color:"#e8e0d0",padding:"10px 14px",width:"100%",outline:"none"}} type="email" value={formData.email} onChange={e=>fv("email",e.target.value)} /></div>
             </div>
           )}
@@ -200,17 +230,18 @@ export default function CartDrawer({ cart, margin, cartTotal, cartCount, updateQ
 
           {/* Resumen de totales */}
           <div style={{ marginBottom: 20 }}>
-            {!checkoutStep && cart.length > 0 && (
+            {checkoutStep && (
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                <span style={{ fontSize: "0.56rem", color: "#555", letterSpacing: "0.06em" }}>Peso total</span>
-                <span style={{ fontSize: "0.56rem", color: "#888", letterSpacing: "0.04em", borderBottom: "1px dotted rgba(255,255,255,0.06)", flex: 1, margin: "0 10px" }}></span>
-                <span style={{ fontSize: "0.7rem", color: "#aaa" }}>{totalKg.toFixed(2)} kg</span>
+                <span style={{ fontSize: "0.56rem", color: "#555", letterSpacing: "0.06em" }}>Envío a {formData.province}</span>
+                <span style={{ fontSize: "0.7rem", color: shippingCost === 0 ? "#6acc6a" : "#aaa" }}>
+                  {shippingCost === 0 ? "GRATIS" : fmt(shippingCost)}
+                </span>
               </div>
             )}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
-              <span style={{ fontSize: "0.62rem", letterSpacing: "0.28em", color: "#555", textTransform: "uppercase" }}>Total estimado</span>
+              <span style={{ fontSize: "0.62rem", letterSpacing: "0.28em", color: "#555", textTransform: "uppercase" }}>Total a Pagar</span>
               <span style={{ borderBottom: "1px dotted rgba(255,255,255,0.06)", flex: 1, margin: "0 10px" }}></span>
-              <span className="serif" style={{ fontSize: "2rem", fontWeight: 300, color: "#c9a84c" }} aria-live="polite">{fmt(cartTotal)}</span>
+              <span className="serif" style={{ fontSize: "2rem", fontWeight: 300, color: "#c9a84c" }} aria-live="polite">{fmt(cartTotal + shippingCost)}</span>
             </div>
             <div style={{ height: 1, background: "linear-gradient(90deg, transparent, rgba(201,168,76,0.2), transparent)" }} />
           </div>
@@ -231,8 +262,8 @@ export default function CartDrawer({ cart, margin, cartTotal, cartCount, updateQ
               {totalKg < 10 ? `Faltan ${(10 - totalKg).toFixed(1)} kg para comprar` : <>Continuar <ChevronRight size={14} aria-hidden="true" /></>}
             </button>
           ) : (
-            <button onClick={handleProceed} disabled={submitting} className="btn-gold" aria-label={`Finalizar pedido por WhatsApp`} style={{ width: "100%", padding: "14px", borderRadius: 2, display: "flex", alignItems: "center", justifyContent: "center", gap: 10, fontSize: "0.7rem", letterSpacing: "0.15em", background:submitting?"#555":"linear-gradient(135deg,#c9a84c,#dbbe6a)" }}>
-              <MessageCircle size={15} aria-hidden="true" /> {submitting ? "Validando..." : "Finalizar por WhatsApp"}
+            <button onClick={handleProceed} disabled={submitting} className="btn-gold" aria-label={`Pagar con Mercado Pago`} style={{ width: "100%", padding: "14px", borderRadius: 2, display: "flex", alignItems: "center", justifyContent: "center", gap: 10, fontSize: "0.7rem", letterSpacing: "0.15em", background:submitting?"#555":"linear-gradient(135deg,#c9a84c,#dbbe6a)" }}>
+              <DollarSign size={15} aria-hidden="true" /> {submitting ? "Cargando Pago..." : "Pagar con Mercado Pago"}
             </button>
           )}
 

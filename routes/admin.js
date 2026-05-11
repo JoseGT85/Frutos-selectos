@@ -223,6 +223,24 @@ router.put("/catalog/name-override", async (req, res) => {
   }
 });
 
+router.get("/catalog/margins", (req, res) => {
+  if (!_catalogRef) return res.status(503).json({ ok: false, error: "Catálogo no disponible" });
+  res.json({ ok: true, margins: _catalogRef.getMargins() });
+});
+
+router.put("/catalog/margins", (req, res) => {
+  const { id, margin } = req.body; // id puede ser "global" o el ID de un producto
+  if (!_catalogRef) return res.status(503).json({ ok: false, error: "Catálogo no disponible" });
+  
+  try {
+    const result = _catalogRef.updateMargin(id, margin);
+    responseCache.invalidate();
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
 // ── POST /api/admin/catalog/sync ─────────────────────────────────────────
 router.post("/catalog/sync", (req, res) => {
   try {

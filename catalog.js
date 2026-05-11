@@ -19,6 +19,7 @@ export class ProductCatalog {
     error: null, 
     source: "init" 
   };
+  #productMargins = {}; // { productId: marginPct }
 
   constructor(margin = 30) {
     this.#margin = margin;
@@ -28,6 +29,20 @@ export class ProductCatalog {
   setMargin(m) {
     this.#margin = Number(m);
     this.invalidate(); // recalcular precios
+  }
+
+  updateMargin(id, newMargin) {
+    if (id === "global") {
+      this.#margin = Number(newMargin);
+    } else {
+      this.#productMargins[id] = Number(newMargin);
+    }
+    this.invalidate();
+    return { ok: true, global: this.#margin, productMargins: this.#productMargins };
+  }
+
+  getMargins() {
+    return { global: this.#margin, perProduct: this.#productMargins };
   }
 
   invalidate() {
@@ -287,11 +302,14 @@ export class ProductCatalog {
 
   // ─── Aplicar margen ────────────────────────────────────────────────────────
   #applyMargin(products) {
-    return products.map(p => ({
-      ...p,
-      salePrice: Math.round(p.cost * (1 + this.#margin / 100)),
-      margin:    this.#margin,
-    }));
+    return products.map(p => {
+      const margin = this.#productMargins[p.id] || this.#margin;
+      return {
+        ...p,
+        salePrice: Math.round(p.cost * (1 + margin / 100)),
+        margin:    margin,
+      };
+    });
   }
 }
 

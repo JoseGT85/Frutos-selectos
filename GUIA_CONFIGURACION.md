@@ -86,6 +86,23 @@ Para que los precios se actualicen solos desde tu planilla:
 
 ---
 
+### 💳 Pasarela de Pagos (Mercado Pago)
+Para que el cliente pueda pagar directamente:
+
+1. Entrá a [Mercado Pago Developers](https://www.mercadopago.com.ar/developers/panel/credentials).
+2. Seleccioná tu aplicación y copiá las "Credenciales de producción".
+3. Agregá al `.env`:
+   - `MP_ACCESS_TOKEN`: El token largo que empieza con `APP_USR-...`
+   - `MP_PUBLIC_KEY`: Tu clave pública.
+   - `WEBHOOK_URL`: La URL de tu servidor en Vercel.
+
+---
+
+### 🚚 Configuración de Envíos (Andreani)
+El sistema está preparado para recibir una tabla de costos por provincia en `payments-service.js`. Por defecto, Mendoza es gratis y el resto del país tiene una tarifa base que podés modificar en el código.
+
+---
+
 ## 4. Cómo cargar respuestas para la IA
 Para que el bot sepa responder dudas de clientes:
 1. Entra a la web al panel de **Administración**.

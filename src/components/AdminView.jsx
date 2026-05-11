@@ -4,7 +4,7 @@ import {
   Eye, EyeOff, CheckCircle, AlertCircle, Plus, Edit2, Trash2, Image as ImageIcon, Link2
 } from "lucide-react";
 import { calcSalePrice, fmt } from "../utils/pricing.js";
-import { addCustomProductAPI, setCostOverrideAPI, deleteCustomProductAPI, uploadImageAPI, setProductImageAPI, setNameOverrideAPI } from "../services/api.js";
+import { addCustomProductAPI, setCostOverrideAPI, deleteCustomProductAPI, uploadImageAPI, setProductImageAPI, setNameOverrideAPI, updateMarginAPI } from "../services/api.js";
 
 export default function AdminView({ products, margin, setMargin, syncing, syncStatus, onSync }) {
   const [showCosts, setShowCosts] = useState(false);
@@ -91,6 +91,15 @@ export default function AdminView({ products, margin, setMargin, syncing, syncSt
       alert("Error al subir foto: " + err.message);
     } finally {
       e.target.value = "";
+    }
+  };
+
+  const handleUpdateMargin = async (id, newMargin) => {
+    try {
+      await updateMarginAPI(id, newMargin);
+      onSync();
+    } catch (err) {
+      alert("Error al actualizar margen: " + err.message);
     }
   };
 
@@ -271,7 +280,7 @@ export default function AdminView({ products, margin, setMargin, syncing, syncSt
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-              {["Producto", "Categoría", "Unidad", ...(showCosts ? ["Costo"] : []), "Precio Venta", "Ganancia"].map((h) => (
+              {["Producto", "Categoría", "Unidad", ...(showCosts ? ["Costo"] : []), "Margen %", "Precio Venta", "Ganancia"].map((h) => (
                 <th key={h} style={{
                   padding: "11px 22px", textAlign: "left",
                   fontSize: "0.56rem", letterSpacing: "0.22em",
@@ -373,9 +382,22 @@ export default function AdminView({ products, margin, setMargin, syncing, syncSt
                       </div>
                     </td>
                   )}
+                  <td style={{ padding: "14px 22px", minWidth: 140 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <input 
+                        type="range" min="0" max="100" step="1" 
+                        value={p.margin || margin}
+                        onChange={(e) => handleUpdateMargin(p.id, e.target.value)}
+                        style={{ flex: 1, height: 4 }}
+                      />
+                      <span style={{ fontSize: "0.75rem", color: "#c9a84c", minWidth: 35, textAlign: "right" }}>
+                        {p.margin || margin}%
+                      </span>
+                    </div>
+                  </td>
                   <td style={{ padding: "14px 22px" }}>
                     <span className="serif" style={{ fontSize: "1rem", color: "#c9a84c" }}>
-                      {fmt(sale)}
+                      {fmt(p.salePrice || calcSalePrice(p.cost, margin))}
                     </span>
                   </td>
                   <td style={{ padding: "14px 22px" }}>
