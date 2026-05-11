@@ -23,7 +23,31 @@
 - Panel admin: Dashboard, Productos CRUD, Pedidos, CRM Leads, Conversaciones IA.
 - Diseño premium "Organic & Earthy".
 
-### Iteración 2 — Productos reales DIFRUMARKET (11/05/2026)
+#### Iteración 3 — Branding "Frutos Selectos" + Dark Mode + Origen Mendoza (11/05/2026)
+- **Rebrand:** "Frutos Secos" → **"Frutos Selectos"** (navbar, footer, hero, chatbot, About, API name).
+- **Origen Mendoza · Argentina** visible en navbar, hero, footer y About.
+- **Hero renovado:**
+  - Nuevo titular: "La naturaleza en su forma más pura." (sin "Crudos")
+  - Layout asimétrico distintivo (texto + imagen flotante con tarjeta "Cosecha 2026")
+  - Marquee de productos en footer del hero (animación CSS infinita)
+  - Blobs decorativos con blur
+- **Modo dark/light toggle:**
+  - Toggle en navbar (sol/luna), persistido en localStorage.
+  - Variables CSS completas para ambos modos (--bg-default, --text-primary, --primary, etc.).
+  - Transiciones suaves entre modos.
+  - Aplicado a: Home, Catalog, Navbar, Footer, Chatbot, CartDrawer, About.
+- **Sección Beneficios — Bento asimétrico:** tarjeta grande (envío), tarjeta media en negativo (curador), 3 tarjetas chicas (pago, origen, calidad).
+- **Chatbot rebranded:**
+  - Removido "IA" del label: "Curador · en línea" en lugar de "Asesor IA".
+  - System prompt actualizado: persona Nuez nunca dice que es una IA, asistente virtual ni bot.
+  - Footer del chat: "Asesoramiento experto en frutos secos".
+- **Nueva regla de envío gratis:**
+  - Solo en **primera compra** + subtotal >= **$400.000 ARS**.
+  - Endpoint `POST /api/orders/shipping-quote` con lógica dinámica.
+  - Frontend muestra mensaje contextual: "Sumá $X más en tu primera compra y el envío es gratis."
+  - Costo de envío estándar: $4.500.
+
+## Iteración 2 — Productos reales DIFRUMARKET (11/05/2026)
 - **50 productos reales** seedeados con datos del distribuidor (CSV oficial DIFRUMARKET).
 - **Modelo de precios mejorado:**
   - `cost_per_kg` (columna 1 — lo que paga el dueño al supplier).
