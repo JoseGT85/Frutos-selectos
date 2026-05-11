@@ -55,13 +55,56 @@ function getSession(phone) {
   return s;
 }
 
-// Limpiar sesiones expiradas cada hora
-setInterval(() => {
-  const cutoff = Date.now() - SESSION_TTL;
+// ── Tareas recurrentes: limpiar sesiones y follow-ups (cada 15 min) ──────────
+setInterval(async () => {
+  const now = Date.now();
+  const cutoff = now - SESSION_TTL; // 24 horas
+
+  // Hora actual en Argentina (0-23)
+  const argHour = parseInt(
+    new Intl.DateTimeFormat("es-AR", {
+      hour: "numeric",
+      timeZone: "America/Argentina/Buenos_Aires",
+      hour12: false,
+    }).format(new Date())
+  );
+
+  // Vigilia: entre las 09:00 y las 21:00 hs
+  const isAwakeTime = argHour >= 9 && argHour <= 21;
+
   for (const [phone, s] of sessions) {
-    if (s.lastActivity < cutoff) sessions.delete(phone);
+    // 1. Limpieza de expirados
+    if (s.lastActivity < cutoff) {
+      sessions.delete(phone);
+      continue;
+    }
+
+    // 2. Follow-up: entre 18 y 23.5 horas de inactividad
+    const ageMs = now - s.lastActivity;
+    const isDue = ageMs >= 18 * 60 * 60_000 && ageMs < 23.5 * 60 * 60_000;
+
+    if (isDue && isAwakeTime && !s.followUpSent) {
+      s.followUpSent = true;
+
+      try {
+        if (_waServiceRef?.isConfigured()) {
+          const clientName = s.name && s.name !== "Cliente" ? ` ${s.name}` : "";
+          const text = `Hola${clientName} 👋. Vimos que ayer estuviste consultando por nuestros productos. ¿Tuviste alguna duda? ¿Querés que te ayude a armar un pedido? 🌰`;
+          
+          await _waServiceRef.sendText(phone, text);
+          
+          // Registrar en la sesión para que la IA tenga contexto
+          s.messages.push({ role: "assistant", content: text });
+          
+          // Notificar al admin por Telegram
+          await notifyAdminsTelegram(phone, s.name || "Cliente", "[Sistema: Follow-up automático]", text, "Sistema", 0);
+        }
+      } catch (err) {
+        console.error(`[WA] Error enviando follow-up a ${phone}:`, err);
+      }
+    }
   }
-}, 60 * 60_000);
+}, 15 * 60_000); // 15 minutos
 
 // ═══════════════════════════════════════════════════════════════════════════
 // GET /webhook/whatsapp — Verificación del webhook (Meta lo llama una vez)
@@ -224,7 +267,6 @@ async function handleIncomingMessage(msg, contacts, metadata) {
         await _waServiceRef.sendButtons(from,
           "¿En qué más puedo ayudarte?",
           [
-            { id: "btn_catalogo",  title: "🛍️ Ver catálogo" },
             { id: "btn_pedido",    title: "📦 Hacer pedido" },
             { id: "btn_envios",    title: "🚚 Info envíos" },
           ]
