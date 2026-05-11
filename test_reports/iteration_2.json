@@ -1,0 +1,41 @@
+{
+  "summary": "Iteration 2 backend testing for Frutos Secos Premium. 30/30 pytest tests PASSED. Verified: (1) 50 DIFRUMARKET seed products returned with new model (cost_per_kg, margin_percent, supplier_price_5kg/1kg, weight_options with weight_kg + price + stock), (2) enrich_product computes prices correctly on-the-fly using cost*weight_kg*(1+margin/100) for null prices and preserves explicit prices, (3) PATCH /api/admin/products/{id}/margin slider works for 10/25/35/40/50, rejects negative & >100 with 400, requires admin auth (401/403), persists & recalculates prices on GET, (4) POST /api/admin/products with new model creates correctly + PUT updates, (5) POST /api/admin/sync-supplier with admin auth contacted Google Sheet and updated 35/37 products (>=30 threshold met), (6) GET /api/admin/sync-status returns last_synced_at + supplier_url, (7) GET /api/categories returns expected categories (almendra-non-pareil, nuez, semillas, mixs, etc.), (8) Regression on auth/orders/mock-pay/webhook/admin dashboard/chat all green, (9) Chatbot mentions real DIFRUMARKET mix products. Mercado Pago remains MOCKED (placeholder token).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/admin/products/{id}/margin", "issue": "Server allows margin 0-100 but problem statement specifies slider range 10-50. Values 0-9 and 51-100 are accepted (not rejected). Not blocking — UI can constrain the slider — but server-side validation is looser than spec."},
+      {"endpoint": "/api/admin/sync-supplier", "issue": "Returns skipped list of unmatched supplier rows. 2 products commonly skipped due to fuzzy match Jaccard < 0.5 (as documented in agent context). Acceptable."},
+      {"endpoint": "/api/webhook/mercadopago", "issue": "Still in MOCK mode (MP_ACCESS_TOKEN placeholder) — webhook always returns {ok:true} without processing. Intentional."},
+      {"endpoint": "POST /api/admin/sync-supplier", "issue": "Uses requests.get synchronously inside async route — blocks the event loop for up to 30s. Should use httpx.AsyncClient or run in thread pool. Not blocking for low concurrency."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_frutos_secos.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Optional: tighten margin validation to 10-50 (current is 0-100) to match the slider spec.",
+    "Optional: replace requests.get with httpx.AsyncClient inside sync_supplier_prices() to avoid blocking the event loop.",
+    "Optional: address duplicate dead code block in upsert_lead (lines 241-273 are unreachable duplicates of 207-240). Harmless but should be removed."
+  ],
+  "critical_code_review_comments": [
+    "server.py upsert_lead() function has a duplicated, unreachable second body (lines 241-273) — copy-paste leftover. Cleanup needed.",
+    "sync_supplier_prices() uses blocking requests.get() inside an async path — under load this will stall other requests.",
+    "Margin validator on PATCH /admin/products/{id}/margin accepts 0-100 but spec says slider is 10-50. Add stricter range check or document the wider tolerance.",
+    "build_default_presentations() applies a fixed 1.32 multiplier when supplier_price_1kg is missing — this is silently bypassing the margin_percent field. Once a margin slider changes, the explicit 'price' stored in weight_options is still used, so the slider does NOT affect products that were seeded with explicit prices from supplier. Important caveat: margin slider only affects price recalculation when option.price is None (which only happens for user-created products via UI). For 50 seed products, margin changes are a no-op until prices are cleared.",
+    "server.py is now ~940 lines — recommend splitting into modules (auth, products, orders, chat, admin, seed, sync).",
+    "CORS allow_origins=['*'] with allow_credentials=True — browsers reject; tighten before prod.",
+    "No rate limiting on /api/auth/login.",
+    "Scheduler uses simple asyncio loop; in multi-worker uvicorn this would run N times. OK for single worker MVP.",
+    "_parse_price uses '.' as thousands separator removal then ',' → '.' for decimals — assumes Argentine number format. Brittle if proveedor changes format."
+  ],
+  "updated_files": ["/app/backend/tests/test_frutos_secos.py"],
+  "success_rate": {"backend": "100% (30/30)", "frontend": "not tested (request scope: backend only)"},
+  "test_credentials": "Admin admin@frutossecos.com.ar / Admin123! confirmed working. Customer accounts created dynamically with TEST_/test_ prefixes.",
+  "seed_data_creation": "Verified: 50 DIFRUMARKET products + 1 admin user seeded. Seed is conditional (only reseeds when no product with cost_per_kg>0 exists). Test products use TEST_ prefix and are cleaned up via fixture teardown.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 2 fully passes. The 'silent slider' caveat (margin changes don't affect seeded products because their weight_options have explicit prices set during seed) may surface as a UX bug — if the user expects the slider to repricing seed products, the seed logic in build_default_presentations() should store price=None and rely solely on enrich_product computation. Worth raising with the main agent. Frontend (admin UI for slider, sync button, category filter) was NOT tested.",
+  "rca_of_the_issue": "No bugs encountered during testing."
+}

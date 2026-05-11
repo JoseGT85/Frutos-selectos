@@ -112,7 +112,8 @@ class LoginIn(BaseModel):
 
 class WeightOption(BaseModel):
     weight: str  # ej "250g"
-    price: float
+    weight_kg: float = 0  # 0.25 para 250g
+    price: Optional[float] = None  # si None, se calcula desde cost × weight_kg × (1+margin)
     stock: int = 0
 
 class ProductIn(BaseModel):
@@ -120,7 +121,10 @@ class ProductIn(BaseModel):
     slug: Optional[str] = None
     description: str = ""
     category: str = "frutos-secos"
-    base_price: float
+    cost_per_kg: float = 0  # precio base supplier (columna 1)
+    margin_percent: float = 25  # slider 10-50, default 25
+    supplier_price_5kg: Optional[float] = None  # referencia columna 2
+    supplier_price_1kg: Optional[float] = None  # referencia columna 3
     image: str
     images: List[str] = []
     weight_options: List[WeightOption] = []
@@ -176,7 +180,64 @@ def slugify(text: str) -> str:
     s = re.sub(r"[\s-]+", "-", s)
     return s
 
+def compute_price_for_option(option: dict, cost_per_kg: float, margin: float) -> float:
+    """Si la opción tiene 'price' definido, lo usa. Si no, calcula desde cost × weight_kg × (1+margin/100)."""
+    if option.get("price") is not None:
+        return float(option["price"])
+    wk = float(option.get("weight_kg") or 0)
+    return round(cost_per_kg * wk * (1 + margin / 100))
+
+def enrich_product(p: dict) -> dict:
+    """Asegura que cada weight_option tenga 'price' calculado para mostrar al cliente."""
+    if not p:
+        return p
+    cost = float(p.get("cost_per_kg") or 0)
+    margin = float(p.get("margin_percent") or 25)
+    opts = p.get("weight_options") or []
+    enriched = []
+    for o in opts:
+        o2 = dict(o)
+        o2["price"] = compute_price_for_option(o, cost, margin)
+        enriched.append(o2)
+    p["weight_options"] = enriched
+    # base_price legacy: precio de 1kg si existe, sino el cost
+    p["base_price"] = next((o["price"] for o in enriched if o.get("weight_kg") == 1.0), cost)
+    return p
+
 async def upsert_lead(email: str, name: str = "", phone: str = "", source: str = "chat", extra: dict = None):
+    """Crea o actualiza un lead en el CRM automáticamente."""
+    if not email:
+        return None
+    existing = await db.leads.find_one({"email": email.lower()})
+    if existing:
+        update = {"updated_at": now_iso()}
+        if name and not existing.get("name"):
+            update["name"] = name
+        if phone and not existing.get("phone"):
+            update["phone"] = phone
+        if extra:
+            update.update(extra)
+        await db.leads.update_one({"email": email.lower()}, {"$set": update})
+        return existing["id"]
+    else:
+        lead = {
+            "id": gen_id(),
+            "email": email.lower(),
+            "name": name,
+            "phone": phone,
+            "source": source,
+            "status": "new",  # new | contacted | customer | recurrent
+            "tags": [],
+            "notes": "",
+            "orders_count": 0,
+            "total_spent": 0.0,
+            "created_at": now_iso(),
+            "updated_at": now_iso(),
+        }
+        if extra:
+            lead.update(extra)
+        await db.leads.insert_one(lead)
+        return lead["id"]
     """Crea o actualiza un lead en el CRM automáticamente."""
     if not email:
         return None
@@ -260,14 +321,19 @@ async def list_products(featured: Optional[bool] = None, category: Optional[str]
     if category:
         query["category"] = category
     items = await db.products.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
-    return items
+    return [enrich_product(p) for p in items]
 
 @api.get("/products/{slug}")
 async def get_product(slug: str):
     p = await db.products.find_one({"slug": slug}, {"_id": 0})
     if not p:
         raise HTTPException(status_code=404, detail="Producto no encontrado")
-    return p
+    return enrich_product(p)
+
+@api.get("/categories")
+async def list_categories():
+    cats = await db.products.distinct("category", {"active": True})
+    return cats
 
 @api.post("/admin/products")
 async def create_product(payload: ProductIn, _admin: dict = Depends(require_admin)):
@@ -280,7 +346,7 @@ async def create_product(payload: ProductIn, _admin: dict = Depends(require_admi
     doc["updated_at"] = now_iso()
     await db.products.insert_one(doc)
     doc.pop("_id", None)
-    return doc
+    return enrich_product(doc)
 
 @api.put("/admin/products/{product_id}")
 async def update_product(product_id: str, payload: ProductIn, _admin: dict = Depends(require_admin)):
@@ -290,7 +356,22 @@ async def update_product(product_id: str, payload: ProductIn, _admin: dict = Dep
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Producto no encontrado")
     p = await db.products.find_one({"id": product_id}, {"_id": 0})
-    return p
+    return enrich_product(p)
+
+@api.patch("/admin/products/{product_id}/margin")
+async def update_margin(product_id: str, payload: dict, _admin: dict = Depends(require_admin)):
+    """Endpoint dedicado para ajustar margen (slider). Body: {margin_percent: 25}"""
+    margin = float(payload.get("margin_percent", 25))
+    if margin < 0 or margin > 100:
+        raise HTTPException(status_code=400, detail="Margen debe estar entre 0 y 100")
+    res = await db.products.update_one(
+        {"id": product_id},
+        {"$set": {"margin_percent": margin, "updated_at": now_iso()}}
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Producto no encontrado")
+    p = await db.products.find_one({"id": product_id}, {"_id": 0})
+    return enrich_product(p)
 
 @api.delete("/admin/products/{product_id}")
 async def delete_product(product_id: str, _admin: dict = Depends(require_admin)):
@@ -576,13 +657,14 @@ Si el cliente está listo para comprar, decile: "Genial! Podés agregar los prod
 """
 
 async def _build_products_context() -> str:
-    products = await db.products.find({"active": True}, {"_id": 0}).to_list(50)
+    products = await db.products.find({"active": True}, {"_id": 0}).to_list(100)
     if not products:
         return "(catálogo vacío)"
+    products = [enrich_product(p) for p in products]
     lines = []
-    for p in products[:20]:
-        opts = ", ".join([f"{o['weight']}=${o['price']}" for o in p.get("weight_options", [])]) or f"${p.get('base_price', 0)}"
-        lines.append(f"- {p['name']}: {p.get('description','')[:80]} | Presentaciones: {opts}")
+    for p in products[:40]:
+        opts = ", ".join([f"{o['weight']}=${int(o['price'])}" for o in p.get("weight_options", [])])
+        lines.append(f"- {p['name']} ({p.get('category','')}): {p.get('description','')[:80]} | Presentaciones: {opts}")
     return "\n".join(lines)
 
 @api.post("/chat")
@@ -661,134 +743,142 @@ async def get_chat_messages(session_id: str):
     return msgs
 
 # ------------------- SEED -------------------
-SEED_PRODUCTS = [
-    {
-        "name": "Almendras Premium",
-        "description": "Almendras enteras, naturales, tostadas suavemente. Crujientes y dulces, ideales para snack saludable o repostería.",
-        "category": "frutos-secos",
-        "base_price": 4500,
-        "image": "https://images.unsplash.com/photo-1608797178974-15b35a64ede9?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzl8MHwxfHNlYXJjaHwyfHxhbG1vbmRzfGVufDB8fHx8MTc3ODUwNjUwOXww&ixlib=rb-4.1.0&q=85",
-        "images": [
-            "https://images.unsplash.com/photo-1600188999986-331bec5f9a8d?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzl8MHwxfHNlYXJjaHwzfHxhbG1vbmRzfGVufDB8fHx8MTc3ODUwNjUwOXww&ixlib=rb-4.1.0&q=85"
-        ],
-        "weight_options": [
-            {"weight": "250g", "price": 4500, "stock": 50},
-            {"weight": "500g", "price": 8500, "stock": 40},
-            {"weight": "1kg", "price": 15500, "stock": 25},
-        ],
-        "featured": True,
-        "active": True,
-        "tags": ["sin-tacc", "natural", "saludable"],
-    },
-    {
-        "name": "Nueces Mariposa",
-        "description": "Nueces enteras mariposa, primera calidad. Sabor intenso, ricas en omega-3.",
-        "category": "frutos-secos",
-        "base_price": 5200,
-        "image": "https://images.unsplash.com/photo-1524593000379-d4729b2c4f99?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Nzd8MHwxfHNlYXJjaHwyfHx3YWxudXRzfGVufDB8fHx8MTc3ODUwNjUwOXww&ixlib=rb-4.1.0&q=85",
-        "images": [
-            "https://images.unsplash.com/photo-1524593656068-fbac72624bb0?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Nzd8MHwxfHNlYXJjaHwxfHx3YWxudXRzfGVufDB8fHx8MTc3ODUwNjUwOXww&ixlib=rb-4.1.0&q=85"
-        ],
-        "weight_options": [
-            {"weight": "250g", "price": 5200, "stock": 35},
-            {"weight": "500g", "price": 9800, "stock": 28},
-            {"weight": "1kg", "price": 18000, "stock": 15},
-        ],
-        "featured": True,
-        "active": True,
-        "tags": ["omega-3", "natural"],
-    },
-    {
-        "name": "Mix Frutos Secos Premium",
-        "description": "Mezcla artesanal de almendras, nueces, castañas de cajú, avellanas y pistachos. Ideal para regalo o consumo diario.",
-        "category": "mix",
-        "base_price": 6500,
-        "image": "https://images.pexels.com/photos/4589141/pexels-photo-4589141.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
-        "images": [],
-        "weight_options": [
-            {"weight": "300g", "price": 6500, "stock": 40},
-            {"weight": "600g", "price": 12000, "stock": 30},
-            {"weight": "1kg", "price": 19500, "stock": 20},
-        ],
-        "featured": True,
-        "active": True,
-        "tags": ["regalo", "premium", "mix"],
-    },
-    {
-        "name": "Castañas de Cajú Tostadas",
-        "description": "Castañas de cajú enteras, tostadas con un toque de sal marina. Cremosas y adictivas.",
-        "category": "frutos-secos",
-        "base_price": 5800,
-        "image": "https://images.unsplash.com/photo-1599599810769-bcde5a160d32?crop=entropy&cs=srgb&fm=jpg&w=940",
-        "images": [],
-        "weight_options": [
-            {"weight": "250g", "price": 5800, "stock": 30},
-            {"weight": "500g", "price": 11000, "stock": 22},
-        ],
-        "featured": False,
-        "active": True,
-        "tags": ["snack", "salado"],
-    },
-    {
-        "name": "Pistachos Tostados",
-        "description": "Pistachos turcos seleccionados, tostados y levemente salados. Con cáscara, crocantes.",
-        "category": "frutos-secos",
-        "base_price": 7200,
-        "image": "https://images.unsplash.com/photo-1583077553281-d72eed9985dd?crop=entropy&cs=srgb&fm=jpg&w=940",
-        "images": [],
-        "weight_options": [
-            {"weight": "200g", "price": 7200, "stock": 25},
-            {"weight": "500g", "price": 16500, "stock": 12},
-        ],
-        "featured": True,
-        "active": True,
-        "tags": ["premium", "snack"],
-    },
-    {
-        "name": "Pasas de Uva Rubias",
-        "description": "Pasas de uva rubias sin semilla, jugosas y dulces. Para repostería o snack natural.",
-        "category": "frutas-deshidratadas",
-        "base_price": 2200,
-        "image": "https://images.unsplash.com/photo-1599599810694-57a2ca8276a8?crop=entropy&cs=srgb&fm=jpg&w=940",
-        "images": [],
-        "weight_options": [
-            {"weight": "500g", "price": 2200, "stock": 60},
-            {"weight": "1kg", "price": 4000, "stock": 40},
-        ],
-        "featured": False,
-        "active": True,
-        "tags": ["dulce", "repostería"],
-    },
-    {
-        "name": "Dátiles Medjool",
-        "description": "Dátiles Medjool de primera, jumbo, carnosos y dulces como caramelo natural.",
-        "category": "frutas-deshidratadas",
-        "base_price": 8500,
-        "image": "https://images.unsplash.com/photo-1601493700631-2b16ec4b4716?crop=entropy&cs=srgb&fm=jpg&w=940",
-        "images": [],
-        "weight_options": [
-            {"weight": "250g", "price": 8500, "stock": 18},
-            {"weight": "500g", "price": 16000, "stock": 10},
-        ],
-        "featured": True,
-        "active": True,
-        "tags": ["premium", "natural", "dulce"],
-    },
-    {
-        "name": "Mix Deportista",
-        "description": "Combo energético: almendras, maní, pasas, semillas de zapallo y arándanos. Perfecto para atletas.",
-        "category": "mix",
-        "base_price": 4800,
-        "image": "https://images.unsplash.com/photo-1599909533730-c8f8a4abc8a5?crop=entropy&cs=srgb&fm=jpg&w=940",
-        "images": [],
-        "weight_options": [
-            {"weight": "500g", "price": 4800, "stock": 45},
-        ],
-        "featured": False,
-        "active": True,
-        "tags": ["deportistas", "energía"],
-    },
-]
+# ------------------- SEED & SYNC -------------------
+from seed_data import get_seed_products, DIFRUMARKET_PRODUCTS
+
+SUPPLIER_SHEET_URL = os.environ.get(
+    "SUPPLIER_SHEET_URL",
+    "https://docs.google.com/spreadsheets/d/e/2PACX-1vSG8HiC02weCi6VOkBZO_DvChdbviKFEeE2WCJEZ-9awel9e4BqFnuvT8iXdRXNMK6orDFk8eiVibmX/pub?output=csv&gid=0&single=true"
+)
+
+def _parse_price(s: str) -> Optional[float]:
+    """Convierte '$19.570' o '19.570' a 19570.0. Retorna None si '-' o vacío."""
+    if not s or s.strip() in ("-", ""):
+        return None
+    cleaned = s.replace("$", "").replace(".", "").replace(",", ".").strip()
+    try:
+        return float(cleaned)
+    except ValueError:
+        return None
+
+def _norm(s: str) -> str:
+    """Normaliza nombres para match fuzzy."""
+    import re, unicodedata
+    s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode("ascii")
+    s = re.sub(r"[^a-zA-Z0-9\s]", " ", s)
+    # stop words
+    s = re.sub(r"\b(de|del|la|el|los|las|y|con|sin|carozo|oferta|super|nbsp|chile|brasil|vietnam|filipinas|argelia|egipto|caja|cal)\b", " ", s, flags=re.IGNORECASE)
+    s = re.sub(r"\b20\d{2}\b", " ", s)
+    s = re.sub(r"\s+", " ", s).strip().lower()
+    return s
+
+def _tokens(s: str) -> set:
+    return set(_norm(s).split())
+
+def _fuzzy_match(target_norm: str, target_tokens: set, candidates: dict) -> Optional[dict]:
+    """Busca el mejor candidato. candidates: {norm_name: product_doc}"""
+    # 1. exacto
+    if target_norm in candidates:
+        return candidates[target_norm]
+    # 2. token Jaccard >= 0.5
+    best = None
+    best_score = 0
+    for cand_norm, prod in candidates.items():
+        cand_tokens = set(cand_norm.split())
+        if not cand_tokens or not target_tokens:
+            continue
+        inter = len(cand_tokens & target_tokens)
+        union = len(cand_tokens | target_tokens)
+        score = inter / union if union else 0
+        if score > best_score and score >= 0.5:
+            best_score = score
+            best = prod
+    return best
+
+async def sync_supplier_prices() -> dict:
+    """Lee el Google Sheet del proveedor (CSV) y actualiza cost_per_kg + precios sugeridos."""
+    import requests, csv, io
+    try:
+        resp = requests.get(SUPPLIER_SHEET_URL, timeout=30)
+        resp.raise_for_status()
+        # Forzar UTF-8 (Google Sheets sirve CSV en UTF-8)
+        text = resp.content.decode("utf-8", errors="replace")
+        reader = csv.reader(io.StringIO(text))
+        rows = list(reader)
+    except Exception as e:
+        logger.error(f"Sync supplier sheet error: {e}")
+        return {"ok": False, "error": str(e), "updated": 0}
+
+    updated = 0
+    skipped = []
+    products = await db.products.find({}, {"_id": 0, "id": 1, "name": 1, "cost_per_kg": 1, "margin_percent": 1, "weight_options": 1}).to_list(500)
+    products_by_norm = {_norm(p["name"]): p for p in products}
+
+    for row in rows:
+        if len(row) < 6:
+            continue
+        name = (row[0] or "").strip()
+        if not name or name.upper() in ("PRODUCTO",):
+            continue
+        if not (row[1] or "").strip().upper().startswith("CAJA"):
+            continue
+        cost = _parse_price(row[3])
+        sup5 = _parse_price(row[4])
+        sup1 = _parse_price(row[5])
+        if cost is None:
+            continue
+
+        norm_name = _norm(name)
+        tokens = set(norm_name.split())
+        match = _fuzzy_match(norm_name, tokens, products_by_norm)
+
+        if not match:
+            skipped.append(name)
+            continue
+
+        update = {
+            "cost_per_kg": cost,
+            "supplier_price_5kg": sup5,
+            "supplier_price_1kg": sup1,
+            "updated_at": now_iso(),
+            "last_synced_at": now_iso(),
+        }
+        await db.products.update_one({"id": match["id"]}, {"$set": update})
+        updated += 1
+
+    logger.info(f"Sync supplier prices: updated={updated} skipped={len(skipped)}")
+    return {"ok": True, "updated": updated, "skipped": skipped, "synced_at": now_iso()}
+
+@api.post("/admin/sync-supplier")
+async def admin_sync_supplier(_admin: dict = Depends(require_admin)):
+    """Dispara manualmente la sincronización con el Google Sheet del proveedor."""
+    return await sync_supplier_prices()
+
+@api.get("/admin/sync-status")
+async def sync_status(_admin: dict = Depends(require_admin)):
+    """Retorna info del último sync."""
+    last = await db.products.find_one(
+        {"last_synced_at": {"$exists": True}},
+        {"_id": 0, "last_synced_at": 1},
+        sort=[("last_synced_at", -1)]
+    )
+    return {
+        "last_synced_at": last.get("last_synced_at") if last else None,
+        "supplier_url": SUPPLIER_SHEET_URL,
+    }
+
+async def _scheduler_loop():
+    """Loop infinito que sincroniza precios cada 24h."""
+    interval = 24 * 60 * 60  # 24h
+    while True:
+        try:
+            await asyncio.sleep(interval)
+            logger.info("Running scheduled supplier price sync...")
+            await sync_supplier_prices()
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.error(f"Scheduler error: {e}")
 
 async def seed_data():
     # Admin user
@@ -805,22 +895,26 @@ async def seed_data():
         })
         logger.info(f"Admin seeded: {ADMIN_EMAIL}")
     else:
-        # Sync password if changed
         if not verify_password(ADMIN_PASSWORD, existing["password_hash"]):
             await db.users.update_one({"email": ADMIN_EMAIL}, {"$set": {"password_hash": hash_password(ADMIN_PASSWORD)}})
             logger.info("Admin password updated.")
 
-    # Products
+    # Products: si no hay productos DIFRUMARKET, hacer reseed completo
+    seed_products = get_seed_products()
+    # Detección: si la cantidad actual difiere o no hay productos con cost_per_kg, reseed.
+    has_difru = await db.products.find_one({"cost_per_kg": {"$exists": True, "$gt": 0}})
     count = await db.products.count_documents({})
-    if count == 0:
-        for p in SEED_PRODUCTS:
+    if not has_difru or count == 0:
+        # Limpiar productos existentes y seed con DIFRUMARKET
+        await db.products.delete_many({})
+        for p in seed_products:
             doc = dict(p)
             doc["id"] = gen_id()
             doc["slug"] = slugify(doc["name"])
             doc["created_at"] = now_iso()
             doc["updated_at"] = now_iso()
             await db.products.insert_one(doc)
-        logger.info(f"Seeded {len(SEED_PRODUCTS)} products.")
+        logger.info(f"Seeded {len(seed_products)} DIFRUMARKET products.")
 
 @app.on_event("startup")
 async def startup():
@@ -831,6 +925,8 @@ async def startup():
         await db.leads.create_index("email", unique=True)
         await db.chat_messages.create_index([("session_id", 1), ("created_at", 1)])
         await seed_data()
+        # Lanzar scheduler de sync en background
+        asyncio.create_task(_scheduler_loop())
     except Exception as e:
         logger.error(f"Startup error: {e}")
 

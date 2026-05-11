@@ -4,7 +4,7 @@ import { Link, Navigate } from "react-router-dom";
 import api, { formatARS } from "@/lib/api";
 import {
   LayoutDashboard, Package, ShoppingCart, Users, MessageSquare, LogOut,
-  TrendingUp, DollarSign, UserCheck, Plus, X, Edit2, Trash2,
+  TrendingUp, DollarSign, UserCheck, Plus, X, Edit2, Trash2, RefreshCw,
 } from "lucide-react";
 
 const TABS = [
@@ -104,8 +104,15 @@ const Dashboard = () => {
 };
 
 const emptyProduct = {
-  name: "", description: "", category: "frutos-secos", base_price: 0,
-  image: "", images: [], weight_options: [{ weight: "500g", price: 0, stock: 0 }],
+  name: "", description: "", category: "frutos-secos",
+  cost_per_kg: 0, margin_percent: 25,
+  supplier_price_5kg: null, supplier_price_1kg: null,
+  image: "", images: [],
+  weight_options: [
+    { weight: "250g", weight_kg: 0.25, price: null, stock: 30 },
+    { weight: "500g", weight_kg: 0.5, price: null, stock: 25 },
+    { weight: "1kg", weight_kg: 1.0, price: null, stock: 15 },
+  ],
   featured: false, active: true, tags: [],
 };
 
@@ -113,9 +120,13 @@ const ProductsTab = () => {
   const [products, setProducts] = useState([]);
   const [editing, setEditing] = useState(null);
   const [showForm, setShowForm] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState("");
+  const [lastSync, setLastSync] = useState(null);
 
   const load = () => api.get("/products").then((r) => setProducts(r.data));
-  useEffect(() => { load(); }, []);
+  const loadSync = () => api.get("/admin/sync-status").then((r) => setLastSync(r.data.last_synced_at));
+  useEffect(() => { load(); loadSync(); }, []);
 
   const save = async (data) => {
     if (editing?.id) await api.put(`/admin/products/${editing.id}`, data);
@@ -131,17 +142,57 @@ const ProductsTab = () => {
     load();
   };
 
+  const sync = async () => {
+    setSyncing(true);
+    setSyncMsg("");
+    try {
+      const { data } = await api.post("/admin/sync-supplier");
+      setSyncMsg(`✓ ${data.updated} productos actualizados${data.skipped?.length ? `, ${data.skipped.length} sin match` : ""}`);
+      load();
+      loadSync();
+    } catch (e) {
+      setSyncMsg("Error al sincronizar");
+    } finally {
+      setSyncing(false);
+      setTimeout(() => setSyncMsg(""), 6000);
+    }
+  };
+
+  const updateMarginQuick = async (id, margin) => {
+    await api.patch(`/admin/products/${id}/margin`, { margin_percent: margin });
+    load();
+  };
+
   return (
     <div data-testid="admin-products">
-      <div className="flex items-center justify-between mb-8">
-        <h1 className="font-serif text-4xl">Productos</h1>
-        <button
-          onClick={() => { setEditing(emptyProduct); setShowForm(true); }}
-          className="bg-[#C35214] text-white px-5 py-2.5 rounded-full text-sm flex items-center gap-2 hover:bg-[#A64B29]"
-          data-testid="add-product-btn"
-        >
-          <Plus size={16} /> Nuevo producto
-        </button>
+      <div className="flex items-center justify-between mb-8 flex-wrap gap-3">
+        <div>
+          <h1 className="font-serif text-4xl">Productos</h1>
+          {lastSync && (
+            <p className="text-xs text-[#968B83] mt-1">
+              Último sync proveedor: {new Date(lastSync).toLocaleString("es-AR")}
+            </p>
+          )}
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          {syncMsg && <span className="text-xs text-[#8A9A86] bg-[#8A9A86]/10 px-3 py-1.5 rounded-full" data-testid="sync-msg">{syncMsg}</span>}
+          <button
+            onClick={sync}
+            disabled={syncing}
+            className="bg-[#2C1E16] text-white px-4 py-2.5 rounded-full text-sm flex items-center gap-2 hover:bg-[#5D4B41] disabled:opacity-50"
+            data-testid="sync-supplier-btn"
+          >
+            <RefreshCw size={14} className={syncing ? "animate-spin" : ""} />
+            {syncing ? "Sincronizando..." : "Sync proveedor"}
+          </button>
+          <button
+            onClick={() => { setEditing(emptyProduct); setShowForm(true); }}
+            className="bg-[#C35214] text-white px-5 py-2.5 rounded-full text-sm flex items-center gap-2 hover:bg-[#A64B29]"
+            data-testid="add-product-btn"
+          >
+            <Plus size={16} /> Nuevo producto
+          </button>
+        </div>
       </div>
 
       <table className="w-full text-sm border border-[#2C1E16]/10 rounded-xl overflow-hidden">
@@ -149,37 +200,60 @@ const ProductsTab = () => {
           <tr>
             <th className="p-3">Producto</th>
             <th className="p-3">Categoría</th>
-            <th className="p-3">Precio base</th>
+            <th className="p-3">Costo/kg</th>
+            <th className="p-3 w-48">Margen</th>
+            <th className="p-3">Precio 1kg</th>
             <th className="p-3">Estado</th>
             <th className="p-3"></th>
           </tr>
         </thead>
         <tbody>
-          {products.map((p) => (
-            <tr key={p.id} className="border-t border-[#2C1E16]/10" data-testid={`product-row-${p.slug}`}>
-              <td className="p-3 flex items-center gap-3">
-                <img src={p.image} alt="" className="w-10 h-10 rounded-lg object-cover" />
-                <div>
-                  <div className="font-medium">{p.name}</div>
-                  <div className="text-xs text-[#968B83]">{p.slug}</div>
-                </div>
-              </td>
-              <td className="p-3 capitalize">{p.category.replace("-", " ")}</td>
-              <td className="p-3">{formatARS(p.base_price)}</td>
-              <td className="p-3">
-                {p.active ? <span className="text-[#8A9A86]">Activo</span> : <span className="text-[#968B83]">Inactivo</span>}
-                {p.featured && <span className="ml-2 text-[#D4AF37]">★</span>}
-              </td>
-              <td className="p-3 text-right">
-                <button onClick={() => { setEditing(p); setShowForm(true); }} className="p-2 hover:bg-[#E5D9C5] rounded" data-testid={`edit-product-${p.slug}`}>
-                  <Edit2 size={14} />
-                </button>
-                <button onClick={() => del(p.id)} className="p-2 hover:bg-red-50 text-red-500 rounded" data-testid={`delete-product-${p.slug}`}>
-                  <Trash2 size={14} />
-                </button>
-              </td>
-            </tr>
-          ))}
+          {products.map((p) => {
+            const kgOpt = p.weight_options?.find((o) => o.weight_kg === 1.0);
+            return (
+              <tr key={p.id} className="border-t border-[#2C1E16]/10" data-testid={`product-row-${p.slug}`}>
+                <td className="p-3">
+                  <div className="flex items-center gap-3">
+                    <img src={p.image} alt="" className="w-10 h-10 rounded-lg object-cover" />
+                    <div>
+                      <div className="font-medium">{p.name}</div>
+                      <div className="text-xs text-[#968B83]">{p.slug}</div>
+                    </div>
+                  </div>
+                </td>
+                <td className="p-3 capitalize text-xs">{p.category.replace(/-/g, " ")}</td>
+                <td className="p-3 font-mono text-xs">{formatARS(p.cost_per_kg || 0)}</td>
+                <td className="p-3">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="range"
+                      min="10"
+                      max="50"
+                      step="1"
+                      value={p.margin_percent || 25}
+                      onChange={(e) => updateMarginQuick(p.id, parseFloat(e.target.value))}
+                      className="flex-1 accent-[#C35214]"
+                      data-testid={`margin-slider-${p.slug}`}
+                    />
+                    <span className="text-xs font-mono font-semibold w-10 text-right">{p.margin_percent || 25}%</span>
+                  </div>
+                </td>
+                <td className="p-3 font-medium text-[#C35214]">{formatARS(kgOpt?.price || 0)}</td>
+                <td className="p-3 text-xs">
+                  {p.active ? <span className="text-[#8A9A86]">Activo</span> : <span className="text-[#968B83]">Inactivo</span>}
+                  {p.featured && <span className="ml-2 text-[#D4AF37]">★</span>}
+                </td>
+                <td className="p-3 text-right whitespace-nowrap">
+                  <button onClick={() => { setEditing(p); setShowForm(true); }} className="p-2 hover:bg-[#E5D9C5] rounded" data-testid={`edit-product-${p.slug}`}>
+                    <Edit2 size={14} />
+                  </button>
+                  <button onClick={() => del(p.id)} className="p-2 hover:bg-red-50 text-red-500 rounded" data-testid={`delete-product-${p.slug}`}>
+                    <Trash2 size={14} />
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
 
@@ -199,38 +273,142 @@ const ProductForm = ({ initial, onClose, onSave }) => {
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const setOpt = (i, k, v) => {
     const opts = [...form.weight_options];
-    opts[i] = { ...opts[i], [k]: k === "weight" ? v : parseFloat(v) || 0 };
+    let val = v;
+    if (k !== "weight") val = v === "" ? null : (parseFloat(v) || 0);
+    opts[i] = { ...opts[i], [k]: val };
     set("weight_options", opts);
   };
+
+  const computedPrice = (opt) => {
+    if (opt.price !== null && opt.price !== undefined && opt.price !== "") return opt.price;
+    const cost = parseFloat(form.cost_per_kg) || 0;
+    const margin = parseFloat(form.margin_percent) || 25;
+    const wk = parseFloat(opt.weight_kg) || 0;
+    return Math.round(cost * wk * (1 + margin / 100));
+  };
+
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" data-testid="product-form-modal">
-      <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-6 border-b border-[#2C1E16]/10">
+      <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-6 border-b border-[#2C1E16]/10 sticky top-0 bg-white z-10">
           <h2 className="font-serif text-2xl">{initial?.id ? "Editar" : "Nuevo"} producto</h2>
           <button onClick={onClose}><X size={20} /></button>
         </div>
-        <div className="p-6 space-y-4">
-          <Inp label="Nombre" v={form.name} on={(v) => set("name", v)} testid="form-name" />
+        <div className="p-6 space-y-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Inp label="Nombre" v={form.name} on={(v) => set("name", v)} testid="form-name" />
+            <Inp label="Categoría" v={form.category} on={(v) => set("category", v)} testid="form-category" />
+          </div>
           <Inp label="Imagen URL" v={form.image} on={(v) => set("image", v)} testid="form-image" />
           <Inp label="Descripción" v={form.description} on={(v) => set("description", v)} ta testid="form-desc" />
-          <div className="grid grid-cols-2 gap-3">
-            <Inp label="Categoría" v={form.category} on={(v) => set("category", v)} testid="form-category" />
-            <Inp label="Precio base" v={form.base_price} on={(v) => set("base_price", parseFloat(v) || 0)} type="number" testid="form-price" />
+
+          {/* PRICING */}
+          <div className="bg-[#F9F6F0] rounded-xl p-5 space-y-4">
+            <h3 className="font-serif text-lg">Precios</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <label className="text-overline block mb-2">Costo/kg (supplier)</label>
+                <input
+                  type="number"
+                  value={form.cost_per_kg || 0}
+                  onChange={(e) => set("cost_per_kg", parseFloat(e.target.value) || 0)}
+                  className="w-full px-3 py-2 rounded-lg border border-[#2C1E16]/15"
+                  data-testid="form-cost"
+                />
+                <p className="text-[10px] text-[#968B83] mt-1">Columna 1 de DIFRUMARKET</p>
+              </div>
+              <div>
+                <label className="text-overline block mb-2">Ref. 5kg supplier</label>
+                <input
+                  type="number"
+                  value={form.supplier_price_5kg || ""}
+                  onChange={(e) => set("supplier_price_5kg", e.target.value ? parseFloat(e.target.value) : null)}
+                  className="w-full px-3 py-2 rounded-lg border border-[#2C1E16]/15"
+                  placeholder="—"
+                  data-testid="form-sup5"
+                />
+                <p className="text-[10px] text-[#968B83] mt-1">Columna 2 (referencia)</p>
+              </div>
+              <div>
+                <label className="text-overline block mb-2">Ref. 1kg supplier</label>
+                <input
+                  type="number"
+                  value={form.supplier_price_1kg || ""}
+                  onChange={(e) => set("supplier_price_1kg", e.target.value ? parseFloat(e.target.value) : null)}
+                  className="w-full px-3 py-2 rounded-lg border border-[#2C1E16]/15"
+                  placeholder="—"
+                  data-testid="form-sup1"
+                />
+                <p className="text-[10px] text-[#968B83] mt-1">Columna 3 (referencia)</p>
+              </div>
+            </div>
+
+            {/* SLIDER */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-overline">Margen de venta</label>
+                <span className="text-2xl font-serif text-[#C35214]">{form.margin_percent || 25}%</span>
+              </div>
+              <input
+                type="range"
+                min="10"
+                max="50"
+                step="1"
+                value={form.margin_percent || 25}
+                onChange={(e) => set("margin_percent", parseFloat(e.target.value))}
+                className="w-full accent-[#C35214]"
+                data-testid="form-margin-slider"
+              />
+              <div className="flex justify-between text-[10px] text-[#968B83] mt-1">
+                <span>10%</span>
+                <span>20%</span>
+                <span>30%</span>
+                <span>40%</span>
+                <span>50%</span>
+              </div>
+            </div>
           </div>
+
+          {/* PRESENTACIONES */}
           <div>
-            <label className="text-overline block mb-2">Presentaciones</label>
+            <label className="text-overline block mb-3">Presentaciones</label>
+            <div className="grid grid-cols-12 gap-2 text-[10px] text-[#968B83] uppercase tracking-wider mb-1">
+              <div className="col-span-3">Etiqueta</div>
+              <div className="col-span-2">Peso (kg)</div>
+              <div className="col-span-3">Precio manual</div>
+              <div className="col-span-2">Calculado</div>
+              <div className="col-span-1">Stock</div>
+              <div className="col-span-1"></div>
+            </div>
             {form.weight_options.map((o, i) => (
-              <div key={i} className="grid grid-cols-3 gap-2 mb-2">
-                <input value={o.weight} onChange={(e) => setOpt(i, "weight", e.target.value)} placeholder="500g" className="px-3 py-2 rounded-lg border border-[#2C1E16]/15" />
-                <input value={o.price} onChange={(e) => setOpt(i, "price", e.target.value)} type="number" placeholder="Precio" className="px-3 py-2 rounded-lg border border-[#2C1E16]/15" />
-                <input value={o.stock} onChange={(e) => setOpt(i, "stock", e.target.value)} type="number" placeholder="Stock" className="px-3 py-2 rounded-lg border border-[#2C1E16]/15" />
+              <div key={i} className="grid grid-cols-12 gap-2 mb-2 items-center">
+                <input value={o.weight || ""} onChange={(e) => setOpt(i, "weight", e.target.value)} placeholder="500g" className="col-span-3 px-3 py-2 rounded-lg border border-[#2C1E16]/15 text-sm" />
+                <input value={o.weight_kg || 0} onChange={(e) => setOpt(i, "weight_kg", e.target.value)} type="number" step="0.01" placeholder="0.5" className="col-span-2 px-3 py-2 rounded-lg border border-[#2C1E16]/15 text-sm" />
+                <input value={o.price ?? ""} onChange={(e) => setOpt(i, "price", e.target.value)} type="number" placeholder="auto" className="col-span-3 px-3 py-2 rounded-lg border border-[#2C1E16]/15 text-sm" />
+                <div className="col-span-2 text-sm text-[#C35214] font-medium">{formatARS(computedPrice(o))}</div>
+                <input value={o.stock ?? 0} onChange={(e) => setOpt(i, "stock", e.target.value)} type="number" placeholder="0" className="col-span-1 px-2 py-2 rounded-lg border border-[#2C1E16]/15 text-sm" />
+                <button
+                  onClick={() => set("weight_options", form.weight_options.filter((_, j) => j !== i))}
+                  className="col-span-1 text-[#968B83] hover:text-red-500"
+                  type="button"
+                >
+                  <X size={14} />
+                </button>
               </div>
             ))}
-            <button onClick={() => set("weight_options", [...form.weight_options, { weight: "", price: 0, stock: 0 }])} className="text-sm text-[#C35214]">
-              + Agregar presentación
+            <button
+              type="button"
+              onClick={() => set("weight_options", [...form.weight_options, { weight: "", weight_kg: 0, price: null, stock: 0 }])}
+              className="text-sm text-[#C35214] mt-2 flex items-center gap-1"
+            >
+              <Plus size={14} /> Agregar presentación
             </button>
+            <p className="text-[10px] text-[#968B83] mt-2">
+              "Precio manual" sobrescribe el cálculo automático. Dejá vacío para usar costo × peso × (1 + margen).
+            </p>
           </div>
-          <div className="flex gap-4">
+
+          <div className="flex gap-6 pt-2">
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={form.featured} onChange={(e) => set("featured", e.target.checked)} data-testid="form-featured" /> Destacado
             </label>
@@ -239,7 +417,7 @@ const ProductForm = ({ initial, onClose, onSave }) => {
             </label>
           </div>
         </div>
-        <div className="p-6 border-t border-[#2C1E16]/10 flex justify-end gap-3">
+        <div className="p-6 border-t border-[#2C1E16]/10 flex justify-end gap-3 sticky bottom-0 bg-white">
           <button onClick={onClose} className="px-5 py-2.5 rounded-full border border-[#2C1E16]/20" data-testid="form-cancel">Cancelar</button>
           <button onClick={() => onSave(form)} className="px-5 py-2.5 rounded-full bg-[#C35214] text-white" data-testid="form-save">Guardar</button>
         </div>
