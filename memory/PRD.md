@@ -5,85 +5,93 @@
 
 ## Contexto del negocio
 - **Rubro:** Frutos secos premium (ecommerce online).
+- **Distribuidor:** DIFRUMARKET (Argentina).
 - **Mercado:** Argentina, todo el país.
-- **Pago:** Mercado Pago (mock por ahora, real al cierre).
+- **Pago:** Mercado Pago (mock por ahora).
 - **Canales (Fase 1):** Web + Chatbot IA en sitio.
-- **Canales (Fase 2):** WhatsApp Business, Telegram, Email (Resend).
+- **Canales (Fase 2):** WhatsApp Business, Telegram, Email.
 
-## Personas
-1. **Visitante:** llega al sitio, explora, chatea con Nuez IA, agrega al carrito y paga.
-2. **Cliente recurrente:** ingresa con cuenta, ve su historial, recibe ofertas.
-3. **Administrador:** gestiona productos, ve pedidos, leads (CRM), conversaciones IA y métricas.
+## ✅ Implementado
 
-## Stack
-- **Backend:** FastAPI + Motor (MongoDB) + emergentintegrations (GPT-5.2) + mercadopago-sdk-py + bcrypt + PyJWT.
-- **Frontend:** React 19 + React Router 7 + Tailwind + Shadcn UI + Lucide Icons.
-- **LLM:** OpenAI GPT-5.2 vía Emergent Universal Key.
-- **DB:** MongoDB (colecciones: users, products, orders, leads, chat_sessions, chat_messages).
+### Iteración 1 — MVP base (11/05/2026)
+- Auth JWT + admin seed idempotente.
+- Storefront completo (Home, Catálogo, Producto, Carrito, Checkout, About).
+- Mercado Pago Checkout Pro con modo MOCK (placeholder).
+- Webhook automático para confirmar pagos.
+- CRM automático: cada chat/signup/checkout crea/actualiza lead.
+- Chatbot IA "Nuez" con GPT-5.2 (Emergent Universal Key).
+- Panel admin: Dashboard, Productos CRUD, Pedidos, CRM Leads, Conversaciones IA.
+- Diseño premium "Organic & Earthy".
 
-## ✅ Implementado en Fase 1 (11/05/2026)
-
-### Backend
-- ✅ Auth JWT (registro, login, admin seed idempotente).
-- ✅ Catálogo de productos (CRUD admin, listado público con filtros).
-- ✅ Carrito client-side (localStorage).
-- ✅ Órdenes con cálculo de envío automático (gratis > $25.000).
-- ✅ Integración Mercado Pago Checkout Pro (modo mock fallback si no hay token).
-- ✅ Webhook Mercado Pago `/api/webhook/mercadopago`.
-- ✅ Endpoint `mock-pay` para simular pagos sin token real.
-- ✅ CRM automático: cada chat/registro/checkout crea o actualiza un lead.
-  - Estados: `new`, `contacted`, `customer`, `recurrent` (promoción automática al pagar).
-- ✅ Chatbot IA con persona "Nuez" + contexto de productos en system prompt.
-- ✅ Persistencia de conversaciones (chat_sessions + chat_messages).
-- ✅ Dashboard admin con métricas (ingresos, pedidos, leads, conversaciones).
-- ✅ Seed automático de 8 productos demo + admin.
-
-### Frontend
-- ✅ Storefront completo (Home, Catálogo, Producto, Carrito drawer, Checkout, About).
-- ✅ Auth (Login/Registro con redirect según rol).
-- ✅ Mi cuenta (placeholder, ampliable).
-- ✅ Checkout 1-pago con Mercado Pago + páginas success/failure/pending/mock.
-- ✅ Panel Admin con 5 secciones: Dashboard, Productos, Pedidos, CRM Leads, Conversaciones.
-- ✅ Chatbot widget flotante "Nuez" con bubble proactivo a los 8s.
-- ✅ Diseño premium "Organic & Earthy" — Cormorant Garamond + Manrope, paleta terracotta/cream.
-- ✅ data-testid en todos los elementos interactivos.
+### Iteración 2 — Productos reales DIFRUMARKET (11/05/2026)
+- **50 productos reales** seedeados con datos del distribuidor (CSV oficial DIFRUMARKET).
+- **Modelo de precios mejorado:**
+  - `cost_per_kg` (columna 1 — lo que paga el dueño al supplier).
+  - `supplier_price_5kg` y `supplier_price_1kg` (columnas 2 y 3 — referencia).
+  - `margin_percent` (slider 10-50%, default 25%).
+  - `weight_options` con `weight_kg` numérico para cálculo automático.
+- **Slider de margen 10-50% por producto:**
+  - Inline en la tabla de productos del admin.
+  - Live preview de precios en el formulario de edición.
+  - PATCH `/api/admin/products/{id}/margin` recalcula automáticamente los precios.
+- **Sync automático desde Google Sheet del proveedor:**
+  - Endpoint manual: POST `/api/admin/sync-supplier` (botón en admin).
+  - Endpoint estado: GET `/api/admin/sync-status` (muestra last_synced_at).
+  - Scheduler diario automático (asyncio task cada 24h).
+  - Matching fuzzy (token Jaccard >= 0.5) tolera diferencias menores de nombre.
+- Imágenes Unsplash/Pexels verificadas por categoría (20 categorías).
+- Función `enrich_product` calcula precios on-the-fly desde cost × peso × (1 + margen).
+- Chatbot IA actualizado para conocer todos los productos DIFRUMARKET con precios reales.
 
 ## 🚀 Automatización del proceso de venta (cómo opera SIN intervención humana)
-1. Visitante entra → ve hero + catálogo.
-2. Chatbot proactivo aparece a los 8s con saludo.
-3. Visitante chatea con "Nuez" IA: recomienda combos según necesidad.
+1. Visitante entra → ve hero + 50 productos reales del catálogo DIFRUMARKET.
+2. Chatbot proactivo aparece a los 8s.
+3. Visitante chatea con "Nuez" IA: recomienda combos según necesidad (con precios reales).
 4. Visitante agrega al carrito → checkout → MP.
-5. Webhook MP confirma pago → orden marcada como `approved`.
+5. Webhook MP confirma pago → orden `approved`.
 6. Lead se promueve automáticamente a `customer` o `recurrent` en CRM.
-7. Admin sólo necesita preparar el envío (todo lo digital es automático).
+7. Admin sólo prepara el envío.
+8. Cada 24h se sincronizan los costos desde DIFRUMARKET (Google Sheet) → margen actualizado en tiempo real.
+
+## 📊 Backend (Tech)
+- FastAPI + Motor (MongoDB) + emergentintegrations (GPT-5.2) + mercadopago-sdk-py + bcrypt + PyJWT.
+- Endpoints principales:
+  - `/api/auth/*` (register, login, me)
+  - `/api/products` + `/api/products/{slug}` + `/api/categories`
+  - `/api/admin/products` (POST/PUT/DELETE)
+  - `/api/admin/products/{id}/margin` (PATCH — slider)
+  - `/api/admin/sync-supplier` (POST — manual sync)
+  - `/api/admin/sync-status` (GET)
+  - `/api/orders` + `/api/orders/{ref}/mock-pay`
+  - `/api/webhook/mercadopago`
+  - `/api/chat` + `/api/chat/{session_id}/messages`
+  - `/api/admin/{dashboard,orders,leads,chat-sessions}`
 
 ## 📋 Backlog priorizado
 
-### P0 (próximo set de keys)
-- [ ] Reemplazar `MP_ACCESS_TOKEN` con token real Mercado Pago.
-- [ ] Reemplazar `RESEND_API_KEY` con key real y enviar email de confirmación + carrito abandonado.
+### P0 (cuando el usuario provea credenciales)
+- [ ] Reemplazar `MP_ACCESS_TOKEN` real Mercado Pago → activa pagos producción.
+- [ ] Reemplazar `RESEND_API_KEY` real → emails confirmación + carrito abandonado.
 
 ### P1 (Fase 2)
-- [ ] Integración WhatsApp Business (Twilio) — mismo agente IA.
+- [ ] WhatsApp Business (Twilio) conectado al agente "Nuez".
 - [ ] Telegram bot.
 - [ ] Vista "Mis pedidos" funcional en `/mi-cuenta`.
-- [ ] Cálculo de envío por provincia (tabla de tarifas).
+- [ ] Tarifas de envío por provincia.
 - [ ] Tracking de envío.
 
 ### P2 (Crecimiento)
-- [ ] Combos/promos con descuentos por volumen.
+- [ ] Combos con descuento por volumen.
 - [ ] Wishlist / favoritos.
 - [ ] Sistema de cupones.
 - [ ] Reseñas de productos.
 - [ ] Programa de referidos.
+- [ ] Sync notification (alerta al admin si un producto del proveedor desaparece).
 
-## Decisiones técnicas clave
-- **Mock MP por defecto:** permite testear el flow E2E sin esperar credenciales del cliente.
-- **CRM unificado:** un solo `lead.email` es la clave; se enriquece desde chat, registro, checkout y pagos.
-- **Chat per-session:** `session_id` en localStorage permite continuar la conversación al volver.
-- **Admin único:** seed idempotente, password sincronizada desde `.env`.
+## Test results
+- Iteration 1: 33/33 backend pasados ✅
+- Iteration 2: 30/30 backend pasados ✅ (incluye PATCH /margin con validación 10-50, sync con Google Sheet real, enrich_product, regression de iteration 1)
 
-## Next Action Items
-- Ejecutar testing agent en backend (auth, productos, órdenes, chat, mock pay, webhook).
-- Posterior: testing frontend.
-- Después: integrar credenciales reales de Mercado Pago + Resend.
+## Credenciales
+- Admin: `admin@frutossecos.com.ar` / `Admin123!`
+- Acceso: `/login` → redirige a `/admin`

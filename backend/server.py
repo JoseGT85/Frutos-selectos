@@ -238,39 +238,6 @@ async def upsert_lead(email: str, name: str = "", phone: str = "", source: str =
             lead.update(extra)
         await db.leads.insert_one(lead)
         return lead["id"]
-    """Crea o actualiza un lead en el CRM automáticamente."""
-    if not email:
-        return None
-    existing = await db.leads.find_one({"email": email.lower()})
-    if existing:
-        update = {"updated_at": now_iso()}
-        if name and not existing.get("name"):
-            update["name"] = name
-        if phone and not existing.get("phone"):
-            update["phone"] = phone
-        if extra:
-            update.update(extra)
-        await db.leads.update_one({"email": email.lower()}, {"$set": update})
-        return existing["id"]
-    else:
-        lead = {
-            "id": gen_id(),
-            "email": email.lower(),
-            "name": name,
-            "phone": phone,
-            "source": source,
-            "status": "new",  # new | contacted | customer | recurrent
-            "tags": [],
-            "notes": "",
-            "orders_count": 0,
-            "total_spent": 0.0,
-            "created_at": now_iso(),
-            "updated_at": now_iso(),
-        }
-        if extra:
-            lead.update(extra)
-        await db.leads.insert_one(lead)
-        return lead["id"]
 
 # ------------------- AUTH ROUTES -------------------
 @api.post("/auth/register")
@@ -360,16 +327,29 @@ async def update_product(product_id: str, payload: ProductIn, _admin: dict = Dep
 
 @api.patch("/admin/products/{product_id}/margin")
 async def update_margin(product_id: str, payload: dict, _admin: dict = Depends(require_admin)):
-    """Endpoint dedicado para ajustar margen (slider). Body: {margin_percent: 25}"""
+    """Endpoint dedicado para ajustar margen (slider). Body: {margin_percent: 25}
+    Recalcula precios de todas las presentaciones (sobrescribe overrides anteriores)."""
     margin = float(payload.get("margin_percent", 25))
-    if margin < 0 or margin > 100:
-        raise HTTPException(status_code=400, detail="Margen debe estar entre 0 y 100")
-    res = await db.products.update_one(
-        {"id": product_id},
-        {"$set": {"margin_percent": margin, "updated_at": now_iso()}}
-    )
-    if res.matched_count == 0:
+    if margin < 10 or margin > 50:
+        raise HTTPException(status_code=400, detail="Margen debe estar entre 10 y 50")
+    product = await db.products.find_one({"id": product_id}, {"_id": 0})
+    if not product:
         raise HTTPException(status_code=404, detail="Producto no encontrado")
+    cost = float(product.get("cost_per_kg") or 0)
+    # Recalcular precios para que el slider efectivamente cambie los valores
+    new_opts = []
+    for o in product.get("weight_options", []):
+        wk = float(o.get("weight_kg") or 0)
+        new_opts.append({
+            "weight": o.get("weight"),
+            "weight_kg": wk,
+            "price": round(cost * wk * (1 + margin / 100)) if wk > 0 else o.get("price"),
+            "stock": o.get("stock", 0),
+        })
+    await db.products.update_one(
+        {"id": product_id},
+        {"$set": {"margin_percent": margin, "weight_options": new_opts, "updated_at": now_iso()}}
+    )
     p = await db.products.find_one({"id": product_id}, {"_id": 0})
     return enrich_product(p)
 
