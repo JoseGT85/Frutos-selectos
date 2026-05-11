@@ -71,7 +71,7 @@ function cbFailure(agentName) {
 // ═══════════════════════════════════════════════════════════════════════════
 function buildSystemPrompt(products, context = {}) {
   const kb = kbService.buildPromptBlock();
-  const businessName = process.env.BUSINESS_NAME || "Frutos Selectos DIFRUMARKET";
+  const businessName = process.env.BUSINESS_NAME || "Frutos Selectos";
   const waNumber     = process.env.WA_NUMBER || "5491112345678";
   const platform     = context.platform || "web";
 

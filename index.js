@@ -161,7 +161,7 @@ bot.start(async ctx => {
   conversations.delete(ctx.from.id); // reset historial al iniciar
 
   await ctx.reply(
-    `🌰 *¡Hola ${name}!* Bienvenido/a a *Frutos Selectos DIFRUMARKET*.\n\n` +
+    `🌰 *¡Hola ${name}!* Bienvenido/a a *Frutos Selectos*.\n\n` +
     `Puedo ayudarte con:\n` +
     `• 🛍️ Precios y disponibilidad\n` +
     `• 📦 Cómo hacer un pedido\n` +
@@ -189,7 +189,7 @@ bot.hears(["🛍️ Ver catálogo", "/catalogo"], async ctx => {
     return acc;
   }, {});
 
-  let msg = `🌰 *Catálogo DIFRUMARKET* — ${products.length} productos\n━━━━━━━━━━━━━━━━\n\n`;
+  let msg = `🌰 *Catálogo Frutos Selectos* — ${products.length} productos\n━━━━━━━━━━━━━━━━\n\n`;
   for (const [cat, items] of Object.entries(byCat)) {
     msg += `*${cat}*\n`;
     items.slice(0, 6).forEach(p => {
@@ -213,7 +213,7 @@ bot.hears(["🕐 Horarios", "/horarios"], async ctx => {
 // Contacto
 bot.hears(["📞 Contacto", "/contacto"], async ctx => {
   await ctx.reply(
-    `📞 *Contacto DIFRUMARKET*\n\n` +
+    `📞 *Contacto Frutos Selectos*\n\n` +
     `WhatsApp: +${process.env.WA_NUMBER || "5491112345678"}\n` +
     `🚚 Envíos a todo el país\n` +
     `📍 Buenos Aires, Argentina\n\n` +
@@ -430,7 +430,7 @@ bot.on("text", async ctx => {
     const isAdmin   = ADMIN_IDS.includes(uid);
     const footer    = isAdmin ? `\n\n_[${agent} · ${latency}ms]_` : "";
     const kbActive  = kbService.getStats().active;
-    const kbFooter  = isAdmin ? "" : `\n\n_Respondido por IA · ${kbActive} respuestas en base · DIFRUMARKET_`;
+    const kbFooter  = isAdmin ? "" : `\n\n_Respondido por IA · Frutos Selectos_`;
 
     await ctx.reply(reply + footer + kbFooter, { parse_mode: "Markdown" });
 
@@ -535,7 +535,7 @@ app.use((err, req, res, next) => {
 // ═══════════════════════════════════════════════════════════════════════════
 if (!isVercel) {
   const server = app.listen(PORT, () => {
-    console.log(`\n🚀 DIFRUMARKET Backend corriendo en puerto ${PORT}`);
+    console.log(`\n🚀 Frutos Selectos Backend corriendo en puerto ${PORT}`);
     console.log(`   📡 API KB:     http://localhost:${PORT}/api/kb`);
     console.log(`   ⚙️  API Admin:  http://localhost:${PORT}/api/admin/status`);
     console.log(`   💚 WhatsApp:   http://localhost:${PORT}/webhook/whatsapp`);
